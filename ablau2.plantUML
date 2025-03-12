@@ -1,0 +1,52 @@
+@startuml ablauf
+participant "IRIS" AS IRIS
+participant "JS Backend" AS JS
+participant "JS Backend DB" AS DB
+participant "Puppeteer" AS PUP
+
+activate IRIS
+IRIS -> JS: GET /auth/{YSYS}/{JBN}/{YB}/{YM} (Authentifizierung)
+activate JS
+JS -> JS: JWT erstellen mit PRs: YSYS, JBN, YB, YM
+activate JS
+JS --> JS: JWT 
+deactivate JS
+JS -> DB: JWT speichern
+activate DB
+IRIS <-- JS: JWT
+deactivate DB
+deactivate JS
+
+IRIS -> JS: POST /macro/{MACROID} (Start macro)
+activate JS
+JS -> JS: JWT prüfen
+activate JS
+JS --> JS: Status
+deactivate JS
+JS ->> PUP: Testfall starten
+activate PUP
+
+JS -> DB: Status setzen für die bestimmte MacroId/SessionId
+activate DB
+deactivate DB
+deactivate JS
+
+JS <<-- PUP: Status
+activate JS 
+deactivate PUP
+JS -> DB: MacroId/SessionId löschen
+deactivate JS 
+activate DB
+
+IRIS -> JS : GET /macro/{MACROID} (Status abfragen)
+deactivate DB
+activate JS
+JS -> DB: Status abfragen
+activate DB
+return Status
+deactivate DB
+JS --> IRIS: Result
+deactivate JS
+deactivate IRIS
+
+@enduml

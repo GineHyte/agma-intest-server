@@ -1,0 +1,8 @@
+/.env
+/.vscode
+/database.db
+/logs
+/media
+/node_modules
+/package-lock.json
+/screenshots

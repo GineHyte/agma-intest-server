@@ -1,0 +1,135 @@
+import fs from "fs";
+import path from "path";
+import { db } from "./database.ts";
+
+/**
+ * Logger class for handling application logging with database integration.
+ * Supports different log levels and stores logs with associated JWT tokens.
+ */
+export default class Logger {
+    /** JWT token for the current session or "system" for system-level logs */
+    private JWT?: string | "system";
+
+    /**
+     * Sets the JWT token for the current logger session after validating it against the database
+     * @param JWT - The JWT token string or "system" for system logs
+     * @returns Promise resolving to true if JWT is valid, false otherwise
+     */
+    async setJWT(JWT: string | "system"): Promise<boolean> {
+        const result = await db
+            .selectFrom('session')
+            .selectAll()
+            .where('JWT', '=', JWT)
+            .executeTakeFirst();
+        
+        if (!result) {
+            this.error('JWT not found in database:', JWT);
+            return false;
+        }
+        this.JWT = JWT;
+        return true;
+    }
+
+    /**
+     * Logs an informational message to the console and database
+     * @param message - The primary message to log
+     * @param optionalParams - Additional parameters to include in the log message
+     * @returns Promise that resolves when the log operation is complete
+     */
+    async log(message?: any, ...optionalParams: any[]): Promise<void> {
+        const actualMessage: string = this.formatMessage(message, optionalParams);
+        console.log("[INFO] " + actualMessage);
+        if (this.JWT) {
+            await this.pushToDatabase(this.JWT, actualMessage, 'info');
+        }
+    }
+
+    /**
+     * Logs a warning message to the console and database
+     * @param message - The primary warning message to log
+     * @param optionalParams - Additional parameters to include in the log message
+     * @returns Promise that resolves when the log operation is complete
+     */
+    async warn(message?: any, ...optionalParams: any[]): Promise<void> {
+        const actualMessage: string = this.formatMessage(message, optionalParams);
+        console.warn("[WARN] " + actualMessage);
+        if (this.JWT) {
+            await this.pushToDatabase(this.JWT, actualMessage, 'warn');
+        }
+    }
+
+    /**
+     * Logs an error message to the console and database
+     * @param message - The primary error message to log
+     * @param optionalParams - Additional parameters to include in the log message
+     * @returns Promise that resolves when the log operation is complete
+     */
+    async error(message?: any, ...optionalParams: any[]): Promise<void> {
+        const actualMessage: string = this.formatMessage(message, optionalParams);
+        console.error("[ERROR] " + actualMessage);
+        if (this.JWT) {
+            await this.pushToDatabase(this.JWT, actualMessage, 'error');
+        }
+    }
+
+    /**
+     * Formats a message and its optional parameters into a single string
+     * @param message - The primary message to format
+     * @param optionalParams - Additional parameters to include in the formatted message
+     * @returns Formatted message string
+     * @private
+     */
+    private formatMessage(message: any, optionalParams: any[]): string {
+        const msgStr = message === undefined || message === null ? '' : String(message);
+        const paramsStr = optionalParams.map(param => 
+            param === undefined || param === null ? '' : String(param)
+        ).join(' ');
+        
+        return msgStr + (paramsStr ? ' ' + paramsStr : '');
+    }
+
+    /**
+     * Stores a log message in the database
+     * @param JWT - The JWT token associated with the log entry
+     * @param message - The formatted log message
+     * @param level - Log level: 'info', 'warn', or 'error'
+     * @returns Promise that resolves when the database operation is complete
+     * @private
+     */
+    private async pushToDatabase(JWT: string, message: string, level: 'info' | 'warn' | 'error' = 'info'): Promise<void> {
+        await db.insertInto('protocol')
+            .values({ JWT: JWT, message: message, level: level, timestamp: Date.now() })
+            .execute();
+    }
+
+    /**
+     * Exports all log entries from the database to a JSON file
+     * @param filename - Path to the output file
+     * @returns Promise that resolves when the file write operation is complete
+     */
+    async dumpProtocolToFile(filename: string): Promise<void> {
+        const protocol = await db.selectFrom('protocol').execute();
+        
+        // Create directory if it doesn't exist
+        const directory = path.dirname(filename);
+        if (!fs.existsSync(directory) && directory !== '') {
+            fs.mkdirSync(directory, { recursive: true });
+        }
+        
+        fs.writeFileSync(filename, JSON.stringify(protocol, null, 2));
+    }
+}
+
+/**
+ * Global system logger instance for application-wide logging
+ */
+export const systemLogger = new Logger();
+
+/**
+ * Initializes the system logger with the "system" JWT
+ * @returns Promise that resolves when the system logger is initialized
+ */
+export async function initSystemLogger(): Promise<void> {
+    await systemLogger.setJWT('system');
+    await systemLogger.log('Logger initialized');
+};

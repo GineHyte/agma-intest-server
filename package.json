@@ -1,0 +1,30 @@
+{
+  "name": "agma-intest-server",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "/src/index.js",
+  "scripts": {
+    "start": "dotenvx run -- ts-node --esm ./src/index.ts",
+    "dev": "nodemon"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@dotenvx/dotenvx": "^1.38.5",
+    "@types/express": "^5.0.0",
+    "better-sqlite3": "^11.8.1",
+    "dotenv": "^16.4.7",
+    "express": "5.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "kysely": "^0.27.6",
+    "puppeteer": "^24.2.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.9",
+    "nodemon": "^3.1.9"
+  }
+}

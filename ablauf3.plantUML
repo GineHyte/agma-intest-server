@@ -1,0 +1,57 @@
+@startuml ablauf3
+participant "Master" AS M
+participant "Worker" AS W
+participant "Tester" AS T
+participant "DB" AS D
+participant "Controller" AS C
+
+
+group init
+    activate D
+    -> M: init master 
+    activate M
+    M -> M: init browser
+    activate M
+    M --> M: brower instance
+    deactivate M
+    M ->> W: create new pages (23)
+    activate W
+    W ->> T: login_on_page(page)
+    activate T
+    W <<-- T: result
+    deactivate T
+end 
+
+group start macro
+    C <<-: HTTP POST /macro/<macroid>
+    activate C
+    C -> D: insert new macro
+    C ->> M: push to queue new task (macro)
+    deactivate C
+    M -->> W: pop last task from queue
+    W ->> W: start task
+    activate W
+    W ->> T: make_actions(page)
+    activate T
+    W <<-- T: result
+    W ->> T: make_actions(page)
+    W <<-- T: result
+    W ->> T: make_actions(page)
+    W <<-- T: result
+    deactivate T
+    W -->> W: end task
+    deactivate W
+    M <<- W: task finished
+    M ->> D: update macro status
+end
+
+group get macro status
+    C <<-: HTTP GET /macro/<macroid>
+    activate C
+    C -> D: get macro status
+    C <-- D: status
+    C ->>: status
+    deactivate C
+end
+
+@enduml

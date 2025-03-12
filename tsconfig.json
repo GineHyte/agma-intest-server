@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ESNext",
+      "DOM"
+    ],
+    "isolatedModules": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "allowJs": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "outDir": "./dist",
+    "experimentalDecorators": true,
+    "verbatimModuleSyntax": false,
+    "typeRoots": [
+      "./node_modules/@types",
+      "./@types"
+    ],
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node",
+    "transpileOnly": false,
+    "compilerOptions": {
+      "module": "NodeNext"
+    }
+  }
+}

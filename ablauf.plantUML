@@ -1,0 +1,37 @@
+@startuml ablauf
+participant "IRIS" AS IRIS
+participant "JS Backend" AS JS
+participant "JS Backend DB" AS DB
+participant "Puppeteer" AS PUP
+
+activate IRIS
+IRIS -> JS: POST /macro (Start macro)
+activate JS
+JS ->> PUP: Start tester
+activate PUP
+JS -> DB: INSERT INTO session VALUES (jobnr, bed, device, status) 
+activate DB
+JS -> DB: SELECT sessionID FROM session WHERE jobnr = jobnr
+JS <-- DB: sessionID
+IRIS <-- JS: sessionID
+IRIS -> JS: GET /macro/{sessionID} (Get macro)
+JS -> DB: Status?
+JS <-- DB: Status
+deactivate DB
+IRIS <-- JS: Status
+deactivate JS
+deactivate IRIS
+JS <<-- PUP: Result
+deactivate PUP
+activate JS
+JS -> DB: UPDATE session SET status = 'done' WHERE sessionID = sessionID
+activate DB
+IRIS -> JS: GET /macro/{sessionID} (Get macro)
+activate IRIS
+JS -> DB: Result?
+JS <-- DB: Result
+deactivate DB
+IRIS <-- JS: Result
+deactivate JS
+deactivate IRIS
+@enduml
