@@ -14,11 +14,12 @@ painter.handleInput = async (line: string) => {
             const workers = await db.selectFrom('worker').selectAll().execute();
             painter.clear();
             painter.mvCur(1, 1);
-            painter.print("Worker ID - Status - Action");
+            painter.rl.write("Worker ID - Status - Action");
             painter.mvCur(1, 2);
             for (const worker of workers) {
-                painter.print(`Worker ${worker.id} - ${worker.status} - ${worker.action}`);
+                painter.rl.write(`Worker ${worker.id} - ${worker.status} - ${worker.action} \n`);
             }
+            await new Promise((resolve) => setTimeout(resolve, 1000));
         }
     }
 }
