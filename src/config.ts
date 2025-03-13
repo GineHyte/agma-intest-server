@@ -22,7 +22,7 @@ const config = {
     "databasePath": "database.db",
     "jwtExpires": 3600,
     "jwtSecret": process.env.JWT_SECRET || "",
-    "workerCount": 5
+    "workerCount": 3
 }
 
 export default config;

@@ -1,6 +1,9 @@
 {
     "watch": ["./src"],
     "ext": "ts",
+    "env": {
+      "NODE_OPTIONS": "--experimental-worker --trace-warnings"
+    },
     "ignore": ["src/**/*.spec.ts"],
-    "exec": "dotenvx run -- ts-node --esm ./src/index.ts"
+    "exec": "npm run start"
   }

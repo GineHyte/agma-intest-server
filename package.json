@@ -4,8 +4,10 @@
   "type": "module",
   "main": "/src/index.js",
   "scripts": {
+    "debugger": "ts-node --esm ./src/debugger/index.ts",
     "start": "dotenvx run -- ts-node --esm ./src/index.ts",
-    "dev": "nodemon"
+    "shutdown": "ts-node --esm ./src/shutdown.ts",
+    "dev": "dotenvx run -- ts-node --esm ./src/watcher.ts"
   },
   "keywords": [],
   "author": "",
@@ -15,6 +17,7 @@
     "@dotenvx/dotenvx": "^1.38.5",
     "@types/express": "^5.0.0",
     "better-sqlite3": "^11.8.1",
+    "cross-env": "^7.0.3",
     "dotenv": "^16.4.7",
     "express": "5.0.1",
     "jsonwebtoken": "^9.0.2",

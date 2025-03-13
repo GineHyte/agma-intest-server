@@ -8,11 +8,10 @@ import config from "./config.ts";
  * This class handles creating directories for media storage and manages recording sessions.
  */
 export default class Recorder {
-    private page: any;
-    private mediaPath: string;
-    private logger: Logger;
     private _recording?: any;
-
+    private logger: Logger;
+    private mediaPath: string;
+    private page: any;
     /**
      * Creates a new Recorder instance.
      * 

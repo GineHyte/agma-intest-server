@@ -9,6 +9,99 @@ import { db } from "./database.ts";
 export default class Logger {
     /** JWT token for the current session or "system" for system-level logs */
     private JWT?: string | "system";
+    /** Worker ID associated with the current logger session */
+    workerId?: number;
+
+    /**
+     * Formats a message and its optional parameters into a single string
+     * @param message - The primary message to format
+     * @param optionalParams - Additional parameters to include in the formatted message
+     * @returns Formatted message string
+     * @private
+     */
+    private formatMessage(message: any, optionalParams: any[]): string {
+        const msgStr = message === undefined || message === null ? '' : String(message);
+        const paramsStr = optionalParams.map(param =>
+            param === undefined || param === null ? '' : String(param)
+        ).join(' ');
+
+        return msgStr + (paramsStr ? ' ' + paramsStr : '');
+    }
+
+    /**
+     * Stores a log message in the database
+     * @param JWT - The JWT token associated with the log entry
+     * @param message - The formatted log message
+     * @param level - Log level: 'info', 'warn', or 'error'
+     * @returns Promise that resolves when the database operation is complete
+     * @private
+     */
+    private async pushToDatabase(JWT: string, message: string, level: 'info' | 'warn' | 'error' = 'info', workerId?: number): Promise<void> {
+        await db.insertInto('protocol')
+            .values({ JWT: JWT, message: message, level: level, timestamp: Date.now(), workerId: workerId })
+            .execute();
+    }
+
+    /**
+     * Exports all log entries from the database to a JSON file
+     * @param filename - Path to the output file
+     * @returns Promise that resolves when the file write operation is complete
+     */
+    async dumpProtocolToFile(filename: string): Promise<void> {
+        const protocol = await db.selectFrom('protocol').execute();
+
+        // Create directory if it doesn't exist
+        const directory = path.dirname(filename);
+        if (!fs.existsSync(directory) && directory !== '') {
+            fs.mkdirSync(directory, { recursive: true });
+        }
+
+        fs.writeFileSync(filename, JSON.stringify(protocol, null, 2));
+    }
+
+    /**
+     * Logs an error message to the console and database
+     * @param message - The primary error message to log
+     * @param optionalParams - Additional parameters to include in the log message
+     * @returns Promise that resolves when the log operation is complete
+     */
+    async error(message?: any, ...optionalParams: any[]): Promise<void> {
+        const actualMessage: string = this.formatMessage(message, optionalParams);
+        let prefix = '[ERROR';
+        if (this.JWT !== undefined) {
+            prefix += ' | ' + this.JWT.slice(0, 8);
+        }
+        if (this.workerId !== undefined) {
+            prefix += ' | Worker ' + this.workerId;
+        }
+
+        console.log(prefix + '] ' + actualMessage);
+        if (this.JWT) {
+            await this.pushToDatabase(this.JWT, actualMessage, 'error');
+        }
+    }
+
+    /**
+     * Logs an informational message to the console and database
+     * @param message - The primary message to log
+     * @param optionalParams - Additional parameters to include in the log message
+     * @returns Promise that resolves when the log operation is complete
+     */
+    async log(message?: any, ...optionalParams: any[]): Promise<void> {
+        const actualMessage: string = this.formatMessage(message, optionalParams);
+        let prefix = '[INFO';
+        if (this.JWT !== undefined) {
+            prefix += ' | ' + this.JWT.slice(0, 8);
+        }
+        if (this.workerId !== undefined) {
+            prefix += ' | Worker ' + this.workerId;
+        }
+
+        console.log(prefix + '] ' + actualMessage);
+        if (this.JWT) {
+            await this.pushToDatabase(this.JWT, actualMessage, 'info');
+        }
+    }
 
     /**
      * Sets the JWT token for the current logger session after validating it against the database
@@ -21,27 +114,13 @@ export default class Logger {
             .selectAll()
             .where('JWT', '=', JWT)
             .executeTakeFirst();
-        
+
         if (!result) {
             this.error('JWT not found in database:', JWT);
             return false;
         }
         this.JWT = JWT;
         return true;
-    }
-
-    /**
-     * Logs an informational message to the console and database
-     * @param message - The primary message to log
-     * @param optionalParams - Additional parameters to include in the log message
-     * @returns Promise that resolves when the log operation is complete
-     */
-    async log(message?: any, ...optionalParams: any[]): Promise<void> {
-        const actualMessage: string = this.formatMessage(message, optionalParams);
-        console.log("[INFO] " + actualMessage);
-        if (this.JWT) {
-            await this.pushToDatabase(this.JWT, actualMessage, 'info');
-        }
     }
 
     /**
@@ -52,71 +131,18 @@ export default class Logger {
      */
     async warn(message?: any, ...optionalParams: any[]): Promise<void> {
         const actualMessage: string = this.formatMessage(message, optionalParams);
-        console.warn("[WARN] " + actualMessage);
+        let prefix = '[WARN';
+        if (this.JWT !== undefined) {
+            prefix += ' | ' + this.JWT.slice(0, 8);
+        }
+        if (this.workerId !== undefined) {
+            prefix += ' | Worker ' + this.workerId;
+        }
+
+        console.log(prefix + '] ' + actualMessage);
         if (this.JWT) {
             await this.pushToDatabase(this.JWT, actualMessage, 'warn');
         }
-    }
-
-    /**
-     * Logs an error message to the console and database
-     * @param message - The primary error message to log
-     * @param optionalParams - Additional parameters to include in the log message
-     * @returns Promise that resolves when the log operation is complete
-     */
-    async error(message?: any, ...optionalParams: any[]): Promise<void> {
-        const actualMessage: string = this.formatMessage(message, optionalParams);
-        console.error("[ERROR] " + actualMessage);
-        if (this.JWT) {
-            await this.pushToDatabase(this.JWT, actualMessage, 'error');
-        }
-    }
-
-    /**
-     * Formats a message and its optional parameters into a single string
-     * @param message - The primary message to format
-     * @param optionalParams - Additional parameters to include in the formatted message
-     * @returns Formatted message string
-     * @private
-     */
-    private formatMessage(message: any, optionalParams: any[]): string {
-        const msgStr = message === undefined || message === null ? '' : String(message);
-        const paramsStr = optionalParams.map(param => 
-            param === undefined || param === null ? '' : String(param)
-        ).join(' ');
-        
-        return msgStr + (paramsStr ? ' ' + paramsStr : '');
-    }
-
-    /**
-     * Stores a log message in the database
-     * @param JWT - The JWT token associated with the log entry
-     * @param message - The formatted log message
-     * @param level - Log level: 'info', 'warn', or 'error'
-     * @returns Promise that resolves when the database operation is complete
-     * @private
-     */
-    private async pushToDatabase(JWT: string, message: string, level: 'info' | 'warn' | 'error' = 'info'): Promise<void> {
-        await db.insertInto('protocol')
-            .values({ JWT: JWT, message: message, level: level, timestamp: Date.now() })
-            .execute();
-    }
-
-    /**
-     * Exports all log entries from the database to a JSON file
-     * @param filename - Path to the output file
-     * @returns Promise that resolves when the file write operation is complete
-     */
-    async dumpProtocolToFile(filename: string): Promise<void> {
-        const protocol = await db.selectFrom('protocol').execute();
-        
-        // Create directory if it doesn't exist
-        const directory = path.dirname(filename);
-        if (!fs.existsSync(directory) && directory !== '') {
-            fs.mkdirSync(directory, { recursive: true });
-        }
-        
-        fs.writeFileSync(filename, JSON.stringify(protocol, null, 2));
     }
 }
 

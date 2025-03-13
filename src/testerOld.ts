@@ -16,13 +16,12 @@ import config from './config.ts';
 import logger from './logger.ts';
 
 export class Tester {
-    browser: Browser | undefined;
+    private appStatus!: AppStatus;
+    private browser: Browser | undefined;
 
-    haltZeit: number;
-    tippenZeit: number;
-    page!: Page;
-    appStatus!: AppStatus;
-
+    private haltZeit: number;
+    private page!: Page;
+    private tippenZeit: number;
     constructor(
         tippenZeit: number = 0,
         haltZeit: number = 0,
@@ -35,26 +34,8 @@ export class Tester {
         }
     }
 
-    async setup() {
-        if (this.browser === undefined) {
-            this.browser = await puppeteer.launch(config.launchOptions);
-            this.page = await this.browser.newPage();
-            await this.page.goto(config.url);
-        } else {
-            this.page = (await this.browser.pages())[0];
-        }
-        await this.page.setViewport(config.viewport);
-        logger.page = this.page;
-    }
-
-    async login() {
-        await this.tippen(config.bediener, '[data-componentid=name]', { delay: this.tippenZeit });
-        await this.tippen(config.kennwort, '[data-componentid=kenn]', { delay: this.tippenZeit });
-        await this.klicken('span[data-ref="btnInnerEl"]');
-        logger.log("Anmeldung erfolgreich");
-        await this.$('[id=image-1033]');                        // warten auf iFood Logo
-        await this.parseAppStatus();
-        logger.log("Job: " + this.appStatus.job);
+    private locator<Selector extends string>(selector: Selector): Locator<NodeFor<Selector>> {
+        return this.page.locator(selector);
     }
 
     private async parseAppStatus() {
@@ -67,10 +48,6 @@ export class Tester {
         this.appStatus.version = appStatus[4].split(': ')[1];
         this.appStatus.mandant = appStatus[5].split(': ')[1];
         this.appStatus.jobverwaltungStatus = appStatus[6].split(' ')[1] === 'aktiv';
-    }
-
-    async halten(ms: number) {
-        return await new Promise(resolve => setTimeout(resolve, ms));
     }
 
     async $(selector: string, maxTime: number = 30_000): Promise<ElementHandle<NodeFor<string>>> {
@@ -95,60 +72,35 @@ export class Tester {
         return await this.page.$$eval(selector, pageFunction, ...args);
     }
 
-    async warten<Selector extends string>(selector: Selector, options?: WaitForSelectorOptions): Promise<ElementHandle<NodeFor<Selector>> | null> {
-        return await this.page.waitForSelector(selector, options);
-    }
-
-    async tippen(text: string, selector: string | undefined = undefined, options?: Readonly<KeyboardTypeOptions>): Promise<void> {
-        await this.halten(this.haltZeit);
-        if (selector) {
-            return await this.page.type(selector, text, options);
-        }
-        return await this.page.keyboard.type(text, options);
-    }
-
-    async klicken(selector: string, options?: Readonly<ClickOptions>): Promise<void> {
-        await this.halten(this.haltZeit);
-        return await this.page.click(selector, options);
-    }
-
-    async drucken(key: KeyInput, options?: Readonly<KeyPressOptions>): Promise<void> {
-        await this.halten(this.haltZeit);
-        return await this.page.keyboard.press(key, options);
-    }
-
     async $eval(selector: string, pageFunction: EvaluateFuncWith<any, any[]>, ...args: any): Promise<any> {
         let element = await this.$(selector);
         return element.evaluate(pageFunction, ...args);
     }
 
-    async logout() {
-        // Zurück zum Hauptbildschirm
-        logger.log("Zurück zum Hauptbildschirm mit Escape");
-        while ((await this.getAktWindowID()) !== '') {
-            await this.drucken('Escape');
-            await this.halten(10); // Kurze Pause zwischen Escape-Drücken
+    async auswahlMel(auswahl: number) {
+        if (auswahl === -1) {
+            await this.klicken(`[id="${await this.getAktWindowID()}_header-targetEl"] div[role="button"]`);
+        } else {
+            await this.$eval(
+                `[id="${await this.getAktWindowID()}_gridPanel-body"]`,
+                (el: HTMLDivElement, index: number) => {
+                    // @ts-ignore   
+                    el.children[0].children[0].children[index].children[0].children[0].children[0].children[0].click();
+                },
+                auswahl - 1
+            );
         }
-        await this.programmaufruf("000");
-        await this.warten('input[value="zum Login"]'); // warten auf zum Login Button
-    }
-
-    locator<Selector extends string>(selector: Selector): Locator<NodeFor<Selector>> {
-        return this.page.locator(selector);
-    }
-
-    async programmaufruf(menuepunkt: string) {
-        await this.page.evaluate((menuepunkt) => window.programmaufruf(menuepunkt), menuepunkt);
-    }
-
-    async getAktWindowID() {
-        return await this.page.evaluate(() => window.windowID);
     }
 
     async close() {
         await this.browser?.close();
         this.browser = undefined;
         this.page = undefined as any;
+    }
+
+    async drucken(key: KeyInput, options?: Readonly<KeyPressOptions>): Promise<void> {
+        await this.halten(this.haltZeit);
+        return await this.page.keyboard.press(key, options);
     }
 
     async feldEingabe(feld: number, text: string, seite: number = 1) {
@@ -163,6 +115,19 @@ export class Tester {
         }
         await inputEl.type(text, { delay: this.tippenZeit });
         await this.drucken('Enter');
+    }
+
+    async getAktWindowID() {
+        return await this.page.evaluate(() => window.windowID);
+    }
+
+    async halten(ms: number) {
+        return await new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async klicken(selector: string, options?: Readonly<ClickOptions>): Promise<void> {
+        await this.halten(this.haltZeit);
+        return await this.page.click(selector, options);
     }
 
     async klickenButton(buttonLabel: string) {
@@ -189,24 +154,58 @@ export class Tester {
         await this.klicken(`a[id="${rightButton.id}"]`);
     }
 
-    async auswahlMel(auswahl: number) {
-        if (auswahl === -1) {
-            await this.klicken(`[id="${await this.getAktWindowID()}_header-targetEl"] div[role="button"]`);
-        } else {
-            await this.$eval(
-                `[id="${await this.getAktWindowID()}_gridPanel-body"]`,
-                (el: HTMLDivElement, index: number) => {
-                    // @ts-ignore   
-                    el.children[0].children[0].children[index].children[0].children[0].children[0].children[0].click();
-                },
-                auswahl - 1
-            );
+    async login() {
+        await this.tippen(config.bediener, '[data-componentid=name]', { delay: this.tippenZeit });
+        await this.tippen(config.kennwort, '[data-componentid=kenn]', { delay: this.tippenZeit });
+        await this.klicken('span[data-ref="btnInnerEl"]');
+        logger.log("Anmeldung erfolgreich");
+        await this.$('[id=image-1033]');                        // warten auf iFood Logo
+        await this.parseAppStatus();
+        logger.log("Job: " + this.appStatus.job);
+    }
+
+    async logout() {
+        // Zurück zum Hauptbildschirm
+        logger.log("Zurück zum Hauptbildschirm mit Escape");
+        while ((await this.getAktWindowID()) !== '') {
+            await this.drucken('Escape');
+            await this.halten(10); // Kurze Pause zwischen Escape-Drücken
         }
+        await this.programmaufruf("000");
+        await this.warten('input[value="zum Login"]'); // warten auf zum Login Button
+    }
+
+    async programmaufruf(menuepunkt: string) {
+        await this.page.evaluate((menuepunkt) => window.programmaufruf(menuepunkt), menuepunkt);
+    }
+
+    async setup() {
+        if (this.browser === undefined) {
+            this.browser = await puppeteer.launch(config.launchOptions);
+            this.page = await this.browser.newPage();
+            await this.page.goto(config.url);
+        } else {
+            this.page = (await this.browser.pages())[0];
+        }
+        await this.page.setViewport(config.viewport);
+        logger.page = this.page;
+    }
+
+    async tippen(text: string, selector: string | undefined = undefined, options?: Readonly<KeyboardTypeOptions>): Promise<void> {
+        await this.halten(this.haltZeit);
+        if (selector) {
+            return await this.page.type(selector, text, options);
+        }
+        return await this.page.keyboard.type(text, options);
     }
 
     async tippenMel(text: string, num: number) {
         await this.tippen(text, `input[id="${await this.getAktWindowID()}_FPOS1_${num}-inputEl"]`, { delay: this.tippenZeit });
         await this.drucken('Enter');
+    }
+
+    async warten<Selector extends string>(selector: Selector, options?: WaitForSelectorOptions): Promise<ElementHandle<NodeFor<Selector>> | null> {
+        return await this.page.waitForSelector(selector, options);
     }
 
     async wartenBisMaskeGeladen() {

@@ -4,25 +4,6 @@ import { Kysely, SqliteDialect } from 'kysely'
 import config from './config.ts'
 import { systemLogger } from './logger.ts'
 
-// Define the database schema interface
-export interface Database {
-  session: {
-    JWT: string
-    YJBN: number
-    YSYS: string
-    YB: string
-    YM: string
-    expires: number
-  }
-  protocol: {
-    id?: number
-    JWT: string
-    timestamp: number
-    message?: string
-    level: "info" | "warn" | "error"
-  }
-}
-
 const dialect = new SqliteDialect({
   database: new SQLite(config.databasePath),
 })
@@ -60,10 +41,36 @@ export async function up(db: Kysely<any>) {
     .addColumn('timestamp', 'integer', (col) => col.notNull().defaultTo(Date.now()))
     .addColumn('message', 'text', (col) => col)
     .addColumn('level', 'varchar(10)', (col) => col.notNull().defaultTo('info'))
+    .addColumn('workerId', 'integer', (col) => col)
     .addForeignKeyConstraint(
       'protocol_JWT_fk', ['JWT'], 'session', ['JWT'],
       (cb) => cb.onDelete('cascade').onUpdate('cascade')
     )
+    .execute()
+
+  await db.schema
+    .createTable('macro')
+    .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+    .addColumn('macroId', 'varchar(255)', (col) => col.notNull().unique())
+    .addColumn('JWT', 'varchar(255)', (col) => col.notNull())
+    .addColumn('status', 'varchar(20)', (col) => col.notNull())
+    .addColumn('result', 'text', (col) => col)
+    .addColumn('entries', 'text', (col) => col)
+    .addColumn('createdAt', 'integer', (col) => col.notNull())
+    .addColumn('completedAt', 'integer', (col) => col)
+    .addForeignKeyConstraint(
+      'macros_JWT_fk', ['JWT'], 'session', ['JWT'],
+      (cb) => cb.onDelete('cascade').onUpdate('cascade')
+    )
+    .execute()
+
+  await db.schema
+    .createTable('worker')
+    .addColumn('id', 'integer', (col) => col.primaryKey())
+    .addColumn('threadId', 'integer', (col) => col.notNull())
+    .addColumn('status', 'varchar(10)', (col) => col.notNull())
+    .addColumn('action', 'varchar(10)', (col) => col.notNull())
+    .addColumn('message', 'text', (col) => col)
     .execute()
 }
 
@@ -83,4 +90,6 @@ export async function initSystemSessionForLogging() {
 export async function down(db: Kysely<any>) {
   await db.schema.dropTable('session').execute()
   await db.schema.dropTable('protocol').execute()
+  await db.schema.dropTable('macro').execute()
+  await db.schema.dropTable('worker').execute()
 }
