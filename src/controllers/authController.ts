@@ -1,36 +1,37 @@
 
 import type { Request, Response } from 'express';
-import logger from '../logger.ts';
+import Logger, { systemLogger } from '../logger.ts';
 import config from '../config.ts';
 import jwt from 'jsonwebtoken';
 import { db } from '../database.ts';
 
+
 /**
- * Handles authentication by creating a JWT token for a client session.
+ * Verarbeitet die Authentifizierung durch Erstellung eines JWT-Tokens für eine Client-Sitzung.
  * 
- * @param req - Express request object containing authentication parameters
- * @param res - Express response object to send the result
- * @returns A Promise that resolves when the authentication process is complete
+ * @param req - Express-Anfrageobjekt mit Authentifizierungsparametern
+ * @param res - Express-Antwortobjekt zum Senden des Ergebnisses
+ * @returns Ein Promise, das aufgelöst wird, wenn der Authentifizierungsprozess abgeschlossen ist
  * 
  * @remarks
- * This function expects the following URL parameters:
- * - YSYS: System identifier string
- * - YJBN: Job number as integer
- * - YB: Batch identifier string
- * - YM: Module identifier string
+ * Diese Funktion erwartet folgende URL-Parameter:
+ * - YSYS: System-Identifikationsstring
+ * - YJBN: Jobnummer 
+ * - YB: Bediener
+ * - YM: Mandant
  * 
- * The function performs the following steps:
- * 1. Validates that all required parameters are present
- * 2. Creates a JWT token with the parameters
- * 3. Checks if a session with this token already exists
- * 4. Creates a new session in the database if it doesn't exist
+ * Die Funktion führt folgende Schritte aus:
+ * 1. Überprüft, ob alle erforderlichen Parameter vorhanden sind
+ * 2. Erstellt ein JWT-Token mit den Parametern
+ * 3. Prüft, ob bereits eine Sitzung mit diesem Token existiert
+ * 4. Erstellt eine neue Sitzung in der Datenbank, falls keine existiert
  * 
- * @throws Returns 400 status if any required parameter is missing
- * @throws Returns 429 status if a session with the same token already exists
- * @throws Returns 500 status if any other error occurs during execution
+ * @throws Gibt Status 400 zurück, wenn ein erforderlicher Parameter fehlt
+ * @throws Gibt Status 429 zurück, wenn bereits eine Sitzung mit demselben Token existiert
+ * @throws Gibt Status 500 zurück, wenn während der Ausführung ein anderer Fehler auftritt
  */
 export async function getAuth(req: Request, res: Response): Promise<void> {
-    await logger.setJWT('system'); // Set JWT for system
+    await systemLogger.log('Authenticating...');
     try {
         let YSYS: string = req.params.YSYS as string;
         let YJBN: number = parseInt(req.params.YJBN as string);
@@ -38,7 +39,7 @@ export async function getAuth(req: Request, res: Response): Promise<void> {
         let YM: string = req.params.YM as string;
 
         if (!YSYS || !YJBN || !YB || !YM) {
-            logger.error('Bad Request');
+            await systemLogger.error('Bad Request');
             res.status(400).json({
                 status: 400,
                 message: `${YSYS ? '' : 'YSYS '}${YJBN ? '' : 'YJBN '}${YB ? '' : 'YB '}${YM ? '' : 'YM '}is missing`
@@ -58,7 +59,7 @@ export async function getAuth(req: Request, res: Response): Promise<void> {
             .where('JWT', '=', token)
             .executeTakeFirst();
         if (session) {
-            logger.error('Too many requests');
+            await systemLogger.error('Too many requests');
             res.status(429).json({
                 status: 429,
                 message: 'Too many requests'
@@ -77,8 +78,9 @@ export async function getAuth(req: Request, res: Response): Promise<void> {
                 expires: Date.now() + config.jwtExpires
             }).execute();
 
-        await logger.setJWT(token); // Set JWT for new session
-        logger.log('New session created: YSYS: ' + YSYS + ', YJBN: ' + YJBN + ', YB: ' + YB + ', YM: ' + YM);
+        let logger = new Logger();
+        await logger.setJWT(token);
+        await logger.log('New session created: YSYS: ' + YSYS + ', YJBN: ' + YJBN + ', YB: ' + YB + ', YM: ' + YM);
 
         res.status(200).json({
             status: 200,
@@ -87,7 +89,7 @@ export async function getAuth(req: Request, res: Response): Promise<void> {
 
     } catch (error) {
         let message = error instanceof Error ? error.message : 'Internal Server Error'
-        logger.error('Error during execution: ' + message);
+        await systemLogger.error('Error during execution: ' + message);
         res.status(500).json({
             status: 500,
             message: message

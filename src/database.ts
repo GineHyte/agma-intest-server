@@ -51,13 +51,13 @@ export async function up(db: Kysely<any>) {
   await db.schema
     .createTable('macro')
     .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
-    .addColumn('macroId', 'varchar(255)', (col) => col.notNull().unique())
+    .addColumn('userMacroId', 'varchar(255)', (col) => col.notNull())
     .addColumn('JWT', 'varchar(255)', (col) => col.notNull())
-    .addColumn('status', 'varchar(20)', (col) => col.notNull())
     .addColumn('result', 'text', (col) => col)
     .addColumn('entries', 'text', (col) => col)
     .addColumn('createdAt', 'integer', (col) => col.notNull())
     .addColumn('completedAt', 'integer', (col) => col)
+    .addColumn('string', 'text', (col) => col)
     .addForeignKeyConstraint(
       'macros_JWT_fk', ['JWT'], 'session', ['JWT'],
       (cb) => cb.onDelete('cascade').onUpdate('cascade')
@@ -71,7 +71,10 @@ export async function up(db: Kysely<any>) {
     .addColumn('status', 'varchar(10)', (col) => col.notNull())
     .addColumn('action', 'varchar(10)', (col) => col.notNull())
     .addColumn('message', 'text', (col) => col)
-    .execute()
+    .addColumn('macroId', 'integer', (col) => col)
+    .addForeignKeyConstraint(
+      'worker_macroId_fk', ['macroId'], 'macro', ['id']
+    ).execute()
 }
 
 export async function initSystemSessionForLogging() {

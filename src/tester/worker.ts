@@ -2,52 +2,104 @@ import { workerData, parentPort } from 'worker_threads';
 import config from '../config.ts';
 import puppeteer from 'puppeteer';
 import Tester from './tester.ts';
-import Logger from '../logger.ts';
+import Logger, { systemLogger } from '../logger.ts';
 import Recorder from '../recorder.ts';
 
+var tester: Tester;
+var recorder: Recorder;
+var context: puppeteer.BrowserContext;
+var browser: puppeteer.Browser;
+var page: puppeteer.Page;
+var workerLogger: Logger;
+var workerTasks: any[] = [];
+var browserWSEndpoint: string;
+var device: string;
+var id: number;
+var currentAction: Action = 'init';
+var currentStatus: Status = 'pending';
+
+
 (async () => {
-    const id = workerData.id;
-    const device = "GBINT" + id.toString();
-    const browserWSEndpoint = workerData.browserWSEndpoint;
-    const workerLogger = new Logger();
+    id = workerData.id;
+    device = "GBINT" + id.toString();
+    browserWSEndpoint = workerData.browserWSEndpoint;
+    workerLogger = new Logger();
     workerLogger.workerId = id;
     // Connect to the browser instance using the WebSocket endpoint
-    const browser = await puppeteer.connect({
+    browser = await puppeteer.connect({
         browserWSEndpoint,
         defaultViewport: config.viewport
     });
     // Create a new browser context to avoid session token conflicts
-    const context = await browser.createBrowserContext();
-    const page = await context.newPage();
-    await page.goto(config.url + "?Device=" + device);
-    await page.setViewport(config.viewport);
-    try {
-        const recorder = new Recorder(page, workerLogger);
-        const tester = new Tester(page, workerLogger);
-        postMessage({ status: 'running', action: 'init', id: id });
-        await tester.login();
-
-        // register all communication events
-        parentPort?.on('message', async (message) => {
-            switch (message.action) {
-                case 'teardown':
-                    postMessage({ status: 'running', action: 'teardown', id: id });
-                    await tester.logout();
-                    await recorder.stopRecording();
-                    postMessage({ status: 'completed', action: 'teardown', id: id });
-                    break;
-                default:
-                    break;
-            }
-        });
-        postMessage({ status: 'completed', action: 'init', id: id });
-    } catch (error) {
-        postMessage({ status: 'completed', action: 'teardown', message: error instanceof Error ? error.message : error, id: id });
-        return;
-    }
+    context = await browser.createBrowserContext();
+    page = await context.newPage();
+    recorder = new Recorder(page, workerLogger);
+    tester = new Tester(page, workerLogger);
+    parentPort?.on('message', async (message) => {
+        await pushTask(message);
+    });
+    await workerLogger.log('Worker has started.');
 })();
 
 // Function to post messages to the parent thread
 function postMessage(arg0: WorkerMessage) {
     return parentPort?.postMessage(arg0);
+}
+
+async function processWorkerTask(task: MasterMessage) {
+    const action = task.action;
+    currentAction = action;
+    currentStatus = 'running';
+    postMessage({ status: 'running', action: action, id: workerData.id });
+    switch (action) {
+        case 'teardown':
+            await workerLogger.log('Worker has received teardown signal.');
+            await tester.logout();
+            await recorder.stopRecording();
+            break;
+        case 'test':
+            await workerLogger.log('Worker has received test signal.');
+            if (task.entries) {
+                const entries = task.entries;
+                await tester.halten(500);
+                let counter = 0;
+                for (const entry of entries) {
+                    switch (entry.type) {
+                        case 'M': // maus
+                            await tester.klicken(`[id=${entry.key}]`);
+                            break;
+                        case 'T': // tippen
+                            await tester.drucken(entry.key);
+                            break;
+                        case 'P': // menuepunkt 
+                            await tester.programmaufruf(entry.key);
+                            break;
+                    }
+                    counter++;
+                }
+            }
+            break;
+        case 'init':
+            await page.goto(config.url + "?Device=" + device);
+            await page.setViewport(config.viewport);
+            await tester.login();
+        default:
+            break;
+    }
+    postMessage({ status: 'completed', action: action, id: workerData.id });
+}
+
+async function pushTask(task: MasterMessage) {
+    workerTasks.push(task);
+    await readTasks();
+}
+
+async function readTasks() {
+    if (currentStatus !== 'pending' && currentStatus !== 'running') {
+        return;
+    }
+    if (workerTasks.length > 0) {
+        const task = workerTasks.shift();
+        await processWorkerTask(task);
+    }
 }

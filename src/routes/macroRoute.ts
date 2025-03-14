@@ -5,7 +5,7 @@ import {
 
 const router = express.Router();
 
-router.post('/', postMacro);
+router.post('/:MACROID', postMacro);
 
 
 export default router;

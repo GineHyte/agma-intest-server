@@ -1,6 +1,6 @@
 const config = {
     "launchOptions": {
-        headless: false,
+        headless: true,
         args: [
             "--incognito",
             "--disable-hang-monitor",
@@ -20,7 +20,7 @@ const config = {
     "haltZeit": 200,
     "tippenZeit": 10,
     "databasePath": "database.db",
-    "jwtExpires": 3600,
+    "jwtExpires": 1000 * 60 * 60 * 24, // 24 hours
     "jwtSecret": process.env.JWT_SECRET || "",
     "workerCount": 3
 }

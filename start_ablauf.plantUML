@@ -1,0 +1,34 @@
+@startuml start_ablauf
+participant "Watcher" as WAT
+participant "App" as APP
+participant "Index" as IND
+participant "Database" as DB
+participant "TestMaster" as TM
+participant "TestWorker" as TW
+
+activate WAT
+    WAT -> WAT: Lösche alle Childprozesse
+    activate WAT
+    deactivate WAT
+    WAT -> IND: Starte Childprozess mit ts-node (default: index.ts)
+    activate IND
+    IND -> APP: Starte App
+    activate APP
+        APP -> DB: Verbinde zur Datenbank
+        activate DB
+        APP -> TM: Starte TestMaster
+        activate TM
+            loop config.workersCount times
+                TM ->> TW: Starte TestWorker
+                activate TW
+                TW ->> TW: Login in die iFood
+                TW ->> TM: Poste Status
+                deactivate TW
+                TM -> DB: Speichere Status
+            end
+        APP -> APP: Starte Express Server
+        activate APP
+        deactivate APP
+
+deactivate WAT
+@enduml

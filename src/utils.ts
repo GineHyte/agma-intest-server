@@ -1,5 +1,5 @@
 import { db } from './database.ts';
-import logger from './logger.ts';
+import { systemLogger } from './logger.ts';
 
 
 /**
@@ -13,16 +13,15 @@ import logger from './logger.ts';
  *          (true if a corresponding session exists in the database, false otherwise)
  */
 export async function checkAuth(JWT: string): Promise<boolean> {
-    await logger.setJWT('system'); // Set JWT for system
-    await logger.log('Checking JWT: ' + JWT);
+    await systemLogger.log('Checking JWT: ' + JWT);
     const session = await db.selectFrom('session')
         .selectAll()
         .where('JWT', '=', JWT)
         .executeTakeFirst();
-    let result = !!session;
-    if (result) {
-        await logger.setJWT(JWT); // Set JWT for session
-        await logger.log('JWT is valid');
+    if (!session) { return false; }
+    if (session.expires < Date.now()) {
+        await systemLogger.error('Session expired: ' + JWT);
+        return false;
     }
-    return result;
+    return true;
 }

@@ -7,11 +7,10 @@ import { Worker } from 'worker_threads';
 export default class TestMaster {
     static #instance: TestMaster;
 
-    
     private browser?: Browser;
     private browserWSEndpoint?: string;
     private workers: Worker[] = [];
-    private workersStatus: Map<number, any> = new Map();
+    private tasks: MasterMessage[] = [];
 
     public static get instance(): TestMaster {
         if (!TestMaster.#instance) {
@@ -19,10 +18,26 @@ export default class TestMaster {
         }
         return TestMaster.#instance;
     }
-    
+
     private async waitForWorkersToFinish(action?: string) {
         await systemLogger.log('Waiting for workers to finish ', action, '...');
-        
+        let allFinished = false;
+        while (!allFinished) {
+            allFinished = true;
+            let workersStatus = await db.selectFrom('worker').selectAll().execute();
+            for (let worker of workersStatus.values()) {
+                if (action === undefined && worker.status !== 'completed') {
+                    allFinished = false;
+                    break;
+                }
+                if (worker.action === action && worker.status !== 'completed') {
+                    allFinished = false;
+                    break;
+                }
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+
         await systemLogger.log('All workers have finished ', action);
     }
 
@@ -31,17 +46,25 @@ export default class TestMaster {
     }
 
     private async workerMessageHandler(message: any) {
-        const id = message.id;
-        const status = message.status;
-        const action = message.action;
-        const worker = this.workers[id];
-        // update worker status
-        this.workersStatus.set(worker.threadId, message);
+        const id: number = message.id;
+        const status: Status = message.status;
+        const action: Action = message.action;
+        const worker: Worker = this.workers[id];
+
+        await db.updateTable('worker')
+            .where("id", "=", id)
+            .set({
+                id: id,
+                threadId: worker.threadId,
+                status: status,
+                action: action,
+                message: message.message
+            }).execute();
         switch (action) {
-            case 'login':
+            case 'init':
                 break;
             case 'teardown':
-                if (status === 'done') {
+                if (status === 'completed') {
                     await systemLogger.log('Worker [', id, '] has finished teardown.');
                     worker.terminate();
                 }
@@ -51,7 +74,7 @@ export default class TestMaster {
         }
     }
 
-    public async setup() {
+    public async init() {
         await systemLogger.log('TestMaster instantiated!');
         if (this.browser === undefined) {
             // Launch browser in server mode
@@ -88,13 +111,13 @@ export default class TestMaster {
             worker.on('message', async (message) => {
                 await this.workerMessageHandler(message);
             });
-            this.workersStatus.set(worker.threadId, { status: 'pending', action: 'init' });
             await db.insertInto('worker').values({
                 id: i,
                 threadId: worker.threadId,
                 status: 'pending',
                 action: 'init'
             }).execute();
+            worker.postMessage({ action: 'init' });
             this.workers.push(worker);
         }
     }
@@ -109,5 +132,28 @@ export default class TestMaster {
         await this.waitForWorkersToFinish('teardown');
         await this.browser?.close();
         await systemLogger.log('Browser has been closed.');
+    }
+
+    public async pushTask(task: MasterMessage) {
+        await systemLogger.log('Pushing task: ', JSON.stringify(task));
+        this.tasks.push(task);
+        await this.processTasks();
+    }
+
+    public async processTasks() {
+        while (this.tasks.length > 0) {
+            let task = this.tasks.shift();
+            if (task) {
+                await systemLogger.log('Processing task: ', JSON.stringify(task));
+                let workersStatus = await db.selectFrom('worker').selectAll().execute();
+                for (let status of workersStatus) {
+                    if (status.status === 'completed' || status.status === 'pending') {
+                        let worker = this.workers[status.id];
+                        worker.postMessage(task);
+                        break;
+                    }
+                }
+            }
+        }
     }
 }

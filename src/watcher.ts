@@ -14,18 +14,23 @@ let childProcess: ChildProcess | null = null;
 
 // Start the app in a child process
 function startApp() {
-    if (childProcess) {
-        try {
-            childProcess.kill();
-        } catch (err) {
-            console.error('Error killing child process:', err);
-        }
-    }
-
     try {
-        childProcess = fork('./src/index.ts', [], {});
+        if (!childProcess) {
+            childProcess = fork('./src/index.ts', [], {});
+            childProcess.on('message', (message) => {
+                if (message === 'shutdown') {
+                    console.log('Child process requested shutdown');
+                    childProcess?.kill();
+                    childProcess = null;
+                    startApp();
+                }
+            }
+            );
+            console.log(`App started with PID: ${childProcess.pid}`);
+        } else {
+            console.log('Child process already running, so only way to restart is to send "shutdown" message from child process');
+        }
 
-        console.log(`App started with PID: ${childProcess.pid}`);
     } catch (err) {
         console.error('Error starting child process:', err);
     }
@@ -52,7 +57,6 @@ nodemon.on('restart', async (files: string[]) => {
         try {
             // Give the process time to shutdown gracefully
             childProcess.send('shutdown');
-            await new Promise(resolve => setTimeout(resolve, 10000));
         } catch (err) {
             console.log('Failed to send shutdown message, forcing restart');
         }
@@ -69,12 +73,5 @@ nodemon.on('crash', () => {
 });
 
 process.on('SIGINT', () => {
-    if (childProcess) {
-        try {
-            childProcess.kill();
-        } catch (err) {
-            console.error('Error killing child process:', err);
-        }
-    }
-    process.exit(0);
+    console.log('Watcher received SIGINT, killing child process');
 });

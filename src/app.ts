@@ -11,8 +11,9 @@ export async function shutdown() {
     await TestMaster.instance.teardown();
     await systemLogger.log('TestMaster teardown complete');
     await systemLogger.log('Closing database connection');
-    await databaseDown(db);
-    process.exit(0);
+    if (process.send) {
+        process.send('shutdown');
+    }
 }
 
 // Main application functionality
@@ -31,7 +32,7 @@ export async function runApp() {
         await initSystemSessionForLogging(); // Create system session for logging
         await initSystemLogger(); // Initialize system logger
         await systemLogger.log('Everything with Protocol table is set up!');
-        await testMaster.setup();
+        await testMaster.init();
         await systemLogger.log('Server is running on port 3000');
     });
 }

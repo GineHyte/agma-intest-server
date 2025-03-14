@@ -1,3 +1,5 @@
+import { KeyInput } from "puppeteer";
+
 declare global {
     interface AppStatus {
         uci: string;
@@ -25,12 +27,25 @@ declare global {
 
     type Status = "pending" | "running" | "completed" | "failed";
     type Level = "info" | "warn" | "error";
-    type Action = string | "teardown" | "init";
+    type Action = string | "teardown" | "init" | "test";
     interface WorkerMessage {
         status: Status;
         action: Action;
         message?: string | unknown;
         id: number;
+    }
+
+    type KeyType = "M" | "T" | "P";
+
+    interface Entry {
+        type: KeyType;
+        key: KeyInput;
+    }
+
+    interface MasterMessage {
+        action: Action;
+        JWT: string;
+        entries?: Entry[];
     }
 
     interface Database {
@@ -52,13 +67,14 @@ declare global {
         }
         macro: {
             id?: number
-            macroId: string
             JWT: string
-            status: Status
+            userMacroId?: string
             result?: string
-            entries?: string // JSON stringified entries
+            entries?: string // JSON string
             createdAt: number
             completedAt?: number
+            workerId?: number
+            string?: string
         }
         worker: {
             id: number
