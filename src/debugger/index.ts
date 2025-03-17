@@ -40,7 +40,7 @@ painter.handleKeyPress = async (line: string) => {
         isInMainMenu = false;
         await painter.drawTable(
             'macro',
-            ['ID', 'UserMacroId', 'JWT', 'Result Message', 'Success?', 'Entries', 'CreatedAt', 'CompletedAt', 'String'],
+            ['ID', 'UserMacroId', 'JWT', 'Result Message', 'Success?', 'Entries Lenght', 'CreatedAt', 'CompletedAt', 'String'],
             (data: any) => {
                 return data.map((macro: any) => [
                     macro.id,
@@ -48,7 +48,7 @@ painter.handleKeyPress = async (line: string) => {
                     macro.JWT ? macro.JWT.slice(0, 10) : "",
                     macro.resultMessage,
                     macro.success,
-                    macro.entries,
+                    macro.entries.length,
                     macro.createdAt,
                     macro.completedAt,
                     macro.string

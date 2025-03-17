@@ -73,16 +73,16 @@ export default class TestMaster {
                 }
                 break;
             case 'test':
-                await systemLogger.log(`JWT: ${JWT}, userMacroId: ${userMacroId}, message: ${message}`);
                 if (JWT === undefined || userMacroId === undefined) {
                     await systemLogger.error('Error during execution:', 'JWT or userMacroId is missing!');
                 } else {
+                    let newMacro = {
+                        resultMessage: message,
+                        success: status === 'completed' ? 1 : 0,
+                        entries: JSON.stringify(handlerPayload.entries)
+                    }
                     await db.updateTable('macro')
-                        .set({
-                            resultMessage: message,
-                            success: status === 'completed' ? 1 : 0,
-                            completedAt: Date.now()
-                        })
+                        .set(newMacro)
                         .where("JWT", "==", JWT)
                         .where("userMacroId", "==", userMacroId)
                         .execute();
@@ -155,7 +155,7 @@ export default class TestMaster {
     }
 
     public async pushTask(task: MasterMessage) {
-        await systemLogger.log('Pushing task: ', JSON.stringify(task.entries));
+        await systemLogger.log('Pushing task: ', task.entries?.length);
         this.tasks.push(task);
         await this.processTasks();
     }

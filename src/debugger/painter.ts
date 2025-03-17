@@ -156,18 +156,9 @@ export default class Painter {
         // Just write directly to stdout
         process.stdout.write(table.toString() + '\n');
         process.stdout.write(`\n<${offset + 1}/${total}>\n`);
-        
-        // Draw the separator line
-        // const { rows, columns } = this.getTerminalSize();
-        // this.mvCur(1, rows - 1);
-        // process.stdout.write('-'.repeat(columns) + '\n');
-        
-        // Position cursor at prompt line
-        // this.moveCursorToBottom();
     }
 
     public async redrawTable() {
-        this.clear();
         this.mvCur(1, 1);
         await this.drawTable(this.tableName, this.tableHeaders, this.tableRowsCallback, this.tableOffset, this.tableLimit);
     }

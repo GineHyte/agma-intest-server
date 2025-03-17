@@ -22,7 +22,6 @@ export async function postMacro(req: Request, res: Response): Promise<void> {
         
         const { entries, string } = req.body;
         const { MACROID } = req.params;
-        await logger.log('Erhaltene Anfrage:', JSON.stringify(entries));
         if (!Array.isArray(entries) || entries.length === 0) {
             res.status(400).json({ status: 400, message: 'Es soll mehr als 0 entries in body eingeben werden!' });
             return;
