@@ -31,6 +31,8 @@ declare global {
     interface WorkerMessage {
         status: Status;
         action: Action;
+        userMacroId?: string;
+        JWT?: string;
         message?: string | unknown;
         id: number;
     }
@@ -45,6 +47,7 @@ declare global {
     interface MasterMessage {
         action: Action;
         JWT: string;
+        userMacroId?: string;
         entries?: Entry[];
     }
 
@@ -69,7 +72,8 @@ declare global {
             id?: number
             JWT: string
             userMacroId?: string
-            result?: string
+            resultMessage?: string
+            success?: number // 0 = false, 1 = true
             entries?: string // JSON string
             createdAt: number
             completedAt?: number

@@ -26,7 +26,7 @@ export default class TestMaster {
             allFinished = true;
             let workersStatus = await db.selectFrom('worker').selectAll().execute();
             for (let worker of workersStatus.values()) {
-                if (action === undefined && worker.status !== 'completed') {
+                if (action === undefined && worker.status !== 'completed' ) {
                     allFinished = false;
                     break;
                 }
@@ -45,11 +45,14 @@ export default class TestMaster {
         await systemLogger.error('Unhandled error in worker [', id === undefined ? id : '', ']: ', error);
     }
 
-    private async workerMessageHandler(message: any) {
-        const id: number = message.id;
-        const status: Status = message.status;
-        const action: Action = message.action;
+    private async workerMessageHandler(handlerPayload: any) {
+        const id: number = handlerPayload.id;
+        const status: Status = handlerPayload.status;
+        const action: Action = handlerPayload.action;
+        const JWT: string | undefined = handlerPayload.JWT;
         const worker: Worker = this.workers[id];
+        const message: string | undefined = handlerPayload.message;
+        const userMacroId: string | undefined = handlerPayload.userMacroId;
 
         await db.updateTable('worker')
             .where("id", "=", id)
@@ -58,7 +61,7 @@ export default class TestMaster {
                 threadId: worker.threadId,
                 status: status,
                 action: action,
-                message: message.message
+                message: message
             }).execute();
         switch (action) {
             case 'init':
@@ -67,6 +70,23 @@ export default class TestMaster {
                 if (status === 'completed') {
                     await systemLogger.log('Worker [', id, '] has finished teardown.');
                     worker.terminate();
+                }
+                break;
+            case 'test':
+                await systemLogger.log(`JWT: ${JWT}, userMacroId: ${userMacroId}, message: ${message}`);
+                if (JWT === undefined || userMacroId === undefined) {
+                    await systemLogger.error('Error during execution:', 'JWT or userMacroId is missing!');
+                } else {
+                    await db.updateTable('macro')
+                        .set({
+                            resultMessage: message,
+                            success: status === 'completed' ? 1 : 0,
+                            completedAt: Date.now()
+                        })
+                        .where("JWT", "==", JWT)
+                        .where("userMacroId", "==", userMacroId)
+                        .execute();
+                    await systemLogger.log('Worker [', id, '] has finished test.');
                 }
                 break;
             default:
@@ -117,7 +137,7 @@ export default class TestMaster {
                 status: 'pending',
                 action: 'init'
             }).execute();
-            worker.postMessage({ action: 'init' });
+            worker.postMessage({ action: 'init', JWT: 'system' });
             this.workers.push(worker);
         }
     }
@@ -135,23 +155,20 @@ export default class TestMaster {
     }
 
     public async pushTask(task: MasterMessage) {
-        await systemLogger.log('Pushing task: ', JSON.stringify(task));
+        await systemLogger.log('Pushing task: ', JSON.stringify(task.entries));
         this.tasks.push(task);
         await this.processTasks();
     }
 
     public async processTasks() {
         while (this.tasks.length > 0) {
-            let task = this.tasks.shift();
-            if (task) {
-                await systemLogger.log('Processing task: ', JSON.stringify(task));
-                let workersStatus = await db.selectFrom('worker').selectAll().execute();
-                for (let status of workersStatus) {
-                    if (status.status === 'completed' || status.status === 'pending') {
-                        let worker = this.workers[status.id];
-                        worker.postMessage(task);
-                        break;
-                    }
+            let workersStatus = await db.selectFrom('worker').selectAll().execute();
+            for (let status of workersStatus) {
+                if (status.status === 'completed' || status.status === 'pending') {
+                    let worker = this.workers[status.id];
+                    let task = this.tasks.shift();
+                    worker.postMessage(task);
+                    break;
                 }
             }
         }

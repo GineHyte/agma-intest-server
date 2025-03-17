@@ -42,7 +42,7 @@ nodemon({
     ext: 'ts',
     watch: ['./src/'],
     exec: 'echo "Changes detected"', // Just a placeholder
-    ignore: ['./src/watcher.ts'] // Don't watch the watcher itself
+    ignore: ['./src/watcher.ts', './src/debugger/**'] // Don't watch the watcher itself
 });
 
 // Start the app initially

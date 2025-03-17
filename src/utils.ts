@@ -13,14 +13,17 @@ import { systemLogger } from './logger.ts';
  *          (true if a corresponding session exists in the database, false otherwise)
  */
 export async function checkAuth(JWT: string): Promise<boolean> {
-    await systemLogger.log('Checking JWT: ' + JWT);
+    await systemLogger.log('Checking JWT: ' + JWT.slice(0, 10) + '...');
     const session = await db.selectFrom('session')
         .selectAll()
         .where('JWT', '=', JWT)
         .executeTakeFirst();
-    if (!session) { return false; }
+    if (!session) { 
+        await systemLogger.error('Session not found: ' + JWT.slice(0, 10) + '...');
+        return false;
+    }
     if (session.expires < Date.now()) {
-        await systemLogger.error('Session expired: ' + JWT);
+        await systemLogger.error('Session expired: ' + JWT.slice(0, 10) + '...');
         return false;
     }
     return true;

@@ -36,10 +36,12 @@ export default class Logger {
      * @returns Promise that resolves when the database operation is complete
      * @private
      */
-    private async pushToDatabase(JWT: string, message: string, level: 'info' | 'warn' | 'error' = 'info', workerId?: number): Promise<void> {
-        await db.insertInto('protocol')
-            .values({ JWT: JWT, message: message, level: level, timestamp: Date.now(), workerId: workerId })
-            .execute();
+    private async pushToDatabase(message: string, level: 'info' | 'warn' | 'error' = 'info'): Promise<void> {
+        if (this.JWT !== undefined) {
+            await db.insertInto('protocol')
+                .values({ JWT: this.JWT, message: message, level: level, timestamp: Date.now(), workerId: this.workerId })
+                .execute();
+        }
     }
 
     /**
@@ -76,9 +78,7 @@ export default class Logger {
         }
 
         console.log(prefix + '] ' + actualMessage);
-        if (this.JWT) {
-            await this.pushToDatabase(this.JWT, actualMessage, 'error');
-        }
+        await this.pushToDatabase(actualMessage, 'error');
     }
 
     /**
@@ -98,9 +98,7 @@ export default class Logger {
         }
 
         console.log(prefix + '] ' + actualMessage);
-        if (this.JWT) {
-            await this.pushToDatabase(this.JWT, actualMessage, 'info');
-        }
+        await this.pushToDatabase(actualMessage, 'info');
     }
 
     /**
@@ -140,9 +138,7 @@ export default class Logger {
         }
 
         console.log(prefix + '] ' + actualMessage);
-        if (this.JWT) {
-            await this.pushToDatabase(this.JWT, actualMessage, 'warn');
-        }
+        await this.pushToDatabase(actualMessage, 'warn');
     }
 }
 

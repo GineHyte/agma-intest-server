@@ -144,6 +144,7 @@ export default class Tester {
     }
 
     async login() {
+        await this.logger.log("Anmeldung...");
         await this.tippen(config.bediener, '[data-componentid=name]', { delay: this.tippenZeit });
         await this.tippen(config.kennwort, '[data-componentid=kenn]', { delay: this.tippenZeit });
         await this.drucken('Enter');
@@ -163,6 +164,19 @@ export default class Tester {
         await this.programmaufruf("000");
         await this.warten('input[value="zum Login"]'); // warten auf zum Login Button
         await this.logger.log("logout done!");
+    }
+
+    async relogin() {
+        let loginBtn = await this.$('input[value="zum Login"]'); // Suchen nach zum Login Button
+        if (loginBtn) {
+            await Promise.all([
+                this.page.waitForNavigation(),
+                this.klicken('input[value="zum Login"]')
+            ]);
+            await this.login();
+        } else {
+            await this.logger.log("Kein Login erforderlich - bereits angemeldet?");
+        }
     }
 
     async programmaufruf(menuepunkt: string) {
