@@ -44,12 +44,7 @@ declare global {
         key: KeyInput;
     }
 
-    enum ResponseStatus {
-        PENDING = 1,
-        RUNNING = 2,
-        COMPLETED = 3,
-        FAILED = 4
-    }
+
 
     interface MasterMessage {
         action: Action;
@@ -80,9 +75,9 @@ declare global {
             JWT: string
             userMacroId?: string
             resultMessage?: string
-            status?: number // 0 = false, 1 = true
+            status?: Status
             entries?: string // JSON string
-            createdAt: number
+            startedAt?: number
             completedAt?: number
             workerId?: number
             string?: string

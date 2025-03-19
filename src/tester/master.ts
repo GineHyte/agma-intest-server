@@ -4,6 +4,10 @@ import { db } from '../database.ts'
 import puppeteer, { Browser } from 'puppeteer';
 import { Worker } from 'worker_threads';
 
+/**
+ * Hauptklasse zur Verwaltung des Testvorgangs und der Testarbeiter.
+ * Verwaltet Browser-Instanzen und verteilt Testaufgaben.
+ */
 export default class TestMaster {
     static #instance: TestMaster;
 
@@ -12,6 +16,10 @@ export default class TestMaster {
     private workers: Worker[] = [];
     private tasks: MasterMessage[] = [];
 
+    /**
+     * Gibt die Singleton-Instanz des TestMasters zurück.
+     * Erstellt eine neue Instanz, falls noch keine existiert.
+     */
     public static get instance(): TestMaster {
         if (!TestMaster.#instance) {
             TestMaster.#instance = new TestMaster();
@@ -19,32 +27,51 @@ export default class TestMaster {
         return TestMaster.#instance;
     }
 
+    /**
+     * Wartet, bis alle Worker ihre Aufgaben abgeschlossen haben.
+     * @param action Optionale Aktion, auf deren Abschluss gewartet werden soll.
+     */
     private async waitForWorkersToFinish(action?: string) {
-        await systemLogger.log('Waiting for workers to finish ', action, '...');
-        let allFinished = false;
-        while (!allFinished) {
-            allFinished = true;
-            let workersStatus = await db.selectFrom('worker').selectAll().execute();
-            for (let worker of workersStatus.values()) {
-                if (action === undefined && worker.status !== 'completed' ) {
-                    allFinished = false;
-                    break;
-                }
-                if (worker.action === action && worker.status !== 'completed') {
-                    allFinished = false;
-                    break;
-                }
-            }
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+        await systemLogger.log('Warte auf Abschluss der Worker ', action, '...');
+        let workers = await db.selectFrom('worker').select('id').execute();
+        for (let worker of workers) {
+            await this.waitForWokerToFinish(worker.id, action);
         }
 
-        await systemLogger.log('All workers have finished ', action);
+        await systemLogger.log('Alle Worker haben ', action, ' abgeschlossen');
     }
 
+    private async waitForWokerToFinish(id: number, action?: string) {
+        await systemLogger.log('Warte auf Abschluss des Worker [', id, '] ', action, '...');
+        let worker = await db.selectFrom('worker').select(['status', 'action']).where("id", "=", id).executeTakeFirstOrThrow();
+        let finished = false;
+        while (!finished) {
+            if (action === undefined && worker.status !== 'completed') {
+                finished = false;
+            }
+            else if (worker.action === action && worker.status !== 'completed') {
+                finished = false;
+            }
+            else { finished = true; }
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            worker = await db.selectFrom('worker').select(['status', 'action']).where("id", "=", id).executeTakeFirstOrThrow();
+        }
+        await systemLogger.log('Worker [', id, '] hat ', action, ' abgeschlossen');
+    }
+
+    /**
+     * Behandelt Fehler, die in Workers auftreten.
+     * @param error Der aufgetretene Fehler.
+     * @param id Die ID des betroffenen Workers.
+     */
     private async workerErrorHandler(error: Error, id?: number) {
-        await systemLogger.error('Unhandled error in worker [', id === undefined ? id : '', ']: ', error);
+        await systemLogger.error('Unbehandelter Fehler in Worker [', id === undefined ? id : '', ']: ', error);
     }
 
+    /**
+     * Verarbeitet Nachrichten von Workers.
+     * @param handlerPayload Die Nutzlast der Worker-Nachricht.
+     */
     private async workerMessageHandler(handlerPayload: any) {
         const id: number = handlerPayload.id;
         const status: Status = handlerPayload.status;
@@ -63,60 +90,66 @@ export default class TestMaster {
                 action: action,
                 message: message
             }).execute();
+        await systemLogger.log('Worker [', id, '] hat ', action, ' mit dem Status ', status, ' gemeldet.');
         switch (action) {
             case 'init':
                 break;
             case 'teardown':
                 if (status === 'completed') {
-                    await systemLogger.log('Worker [', id, '] has finished teardown.');
+                    await systemLogger.log('Worker [', id, '] hat teardown abgeschlossen.');
                     worker.terminate();
                 }
                 break;
             case 'test':
-                if (JWT === undefined || userMacroId === undefined) {
-                    await systemLogger.error('Error during execution:', 'JWT or userMacroId is missing!');
-                } else {
-                    let newMacro = {
-                        resultMessage: message,
-                        success: status === 'completed' ? 1 : 0,
-                        entries: JSON.stringify(handlerPayload.entries)
-                    }
-                    await db.updateTable('macro')
-                        .set(newMacro)
-                        .where("JWT", "==", JWT)
-                        .where("userMacroId", "==", userMacroId)
-                        .execute();
-                    await systemLogger.log('Worker [', id, '] has finished test.');
+                if (JWT === undefined || userMacroId === undefined) { break; }
+                let newMacro: any = {
+                    resultMessage: message,
+                    status: status,
+                    entries: JSON.stringify(handlerPayload.entries),
                 }
+                if (status === 'running' || status === 'pending') {
+                    newMacro.startedAt = Date.now();
+                } else {
+                    newMacro.completedAt = Date.now();
+                }
+                await db.updateTable('macro')
+                    .set(newMacro)
+                    .where("JWT", "==", JWT)
+                    .where("userMacroId", "==", userMacroId)
+                    .execute();
+                await systemLogger.log('Worker [', id, '] hat Test abgeschlossen.');
                 break;
             default:
                 break;
         }
     }
 
+    /**
+     * Initialisiert den TestMaster und startet die Worker.
+     */
     public async init() {
-        await systemLogger.log('TestMaster instantiated!');
+        await systemLogger.log('TestMaster instanziiert!');
         if (this.browser === undefined) {
-            // Launch browser in server mode
+            // Browser im Server-Modus starten
             this.browser = await puppeteer.launch({
                 ...config.launchOptions,
-                // These options enable browser server mode
+                // Diese Optionen aktivieren den Browser-Server-Modus
                 args: [
                     ...(config.launchOptions.args || []),
                     '--remote-debugging-port=0'
                 ]
             });
 
-            // Get the browser WebSocket endpoint
+            // Browser WebSocket-Endpunkt abrufen
             this.browserWSEndpoint = this.browser.wsEndpoint();
-            await systemLogger.log(`Browser started in server mode with endpoint: ${this.browserWSEndpoint}`);
+            await systemLogger.log(`Browser im Server-Modus gestartet mit Endpunkt: ${this.browserWSEndpoint}`);
         }
 
-        await systemLogger.log('Starting initialisation of TestWorkers...');
+        await systemLogger.log('Starte Initialisierung der TestWorker...');
         let worker: Worker;
 
         for (let i = 0; i < config.workerCount; i++) {
-            await systemLogger.log('Starting worker ' + i);
+            await systemLogger.log('Starte Worker ' + i);
             worker = new Worker('./src/tester/worker.ts', {
                 workerData: {
                     id: i,
@@ -124,7 +157,7 @@ export default class TestMaster {
                 }
             });
 
-            // register all communication events
+            // Alle Kommunikationsereignisse registrieren
             worker.on('error', async (error) => {
                 await this.workerErrorHandler(error, i);
             });
@@ -142,35 +175,45 @@ export default class TestMaster {
         }
     }
 
+    /**
+     * Beendet alle Worker und schließt den Browser.
+     */
     public async teardown() {
-        await systemLogger.log('Starting teardown of TestWorkers...');
+        await systemLogger.log('Starte Beendigung der TestWorker...');
         await this.waitForWorkersToFinish();
         for (let worker of this.workers) {
             worker.postMessage({ action: 'teardown' });
         }
-        await systemLogger.log('All workers have been instructed to teardown.');
+        await systemLogger.log('Alle Worker wurden zur Beendigung angewiesen.');
         await this.waitForWorkersToFinish('teardown');
         await this.browser?.close();
-        await systemLogger.log('Browser has been closed.');
+        await systemLogger.log('Browser wurde geschlossen.');
     }
 
+    /**
+     * Fügt eine neue Aufgabe zur Warteschlange hinzu.
+     * @param task Die hinzuzufügende Aufgabe.
+     */
     public async pushTask(task: MasterMessage) {
-        await systemLogger.log('Pushing task: ', task.entries?.length);
+        await systemLogger.log('Füge Aufgabe hinzu: ', task.entries?.length);
         this.tasks.push(task);
         await this.processTasks();
     }
 
+    /**
+     * Verarbeitet Aufgaben aus der Warteschlange und weist sie verfügbaren Workern zu.
+     */
     public async processTasks() {
         while (this.tasks.length > 0) {
-            let workersStatus = await db.selectFrom('worker').selectAll().execute();
-            for (let status of workersStatus) {
-                if (status.status === 'completed' || status.status === 'pending') {
-                    let worker = this.workers[status.id];
-                    let task = this.tasks.shift();
-                    worker.postMessage(task);
-                    break;
-                }
+            let workers = await db.selectFrom('worker').select(['id', 'status']).execute();
+            for (let worker of workers) { // Suche nach verfügbaren Workern
+                if (worker.status === 'running') { continue; } // Worker ist bereits beschäftigt
+                let workerObject = this.workers[worker.id];
+                let task = this.tasks.shift();
+                workerObject.postMessage(task);
+                break;
             }
+            await new Promise((resolve) => setTimeout(resolve, 500));
         }
     }
 }

@@ -45,7 +45,7 @@ async function processWorkerTask(task: MasterMessage) {
     const action = task.action;
     currentAction = action;
     currentStatus = 'running';
-    postMessage({ status: 'running', action: action, id: workerData.id });
+    postMessage({ status: 'running', action: action, id: workerData.id, userMacroId: task.userMacroId, JWT: task.JWT });
     await workerLogger.log('Worker has received ' + action + ' signal.');
     switch (action) {
         case 'teardown':
@@ -53,6 +53,7 @@ async function processWorkerTask(task: MasterMessage) {
             await recorder.stopRecording();
             break;
         case 'test':
+            await workerLogger.log('UserMacroId: ' + task.userMacroId);
             if (task.userMacroId === undefined) {
                 await workerLogger.error('Fehler bei Ausführung:', 'userMacroId ist nicht vorhanden!');
                 postMessage({ status: 'failed', action: action, message: 'userMacroId ist nicht vorhanden!', id: workerData.id });
@@ -80,10 +81,11 @@ async function processWorkerTask(task: MasterMessage) {
                         message += error instanceof Error ? error.message : 'Internal Server Error';
                         await workerLogger.error('Fehler bei Ausführung:', message);
                         postMessage({ status: 'failed', action: action, message: message, id: workerData.id, userMacroId: userMacroId, JWT: task.JWT });
+                        postMessage({ status: 'running', action: 'init', id: workerData.id });
                         await tester.logout();
                         await workerLogger.log("Führen relogin Funktion aus nach dem Fehler...");
                         await tester.relogin();
-                        postMessage({ status: 'completed', action: 'init', id: workerData.id });
+                        postMessage({ status: 'completed', action: 'init', message: "Erfolg!", id: workerData.id });
                         return;
                     }
                 }
@@ -101,7 +103,7 @@ async function processWorkerTask(task: MasterMessage) {
         default:
             break;
     }
-    postMessage({ status: 'completed', action: action, id: workerData.id });
+    postMessage({ status: 'completed', message: "Erfolg!", action: action, id: workerData.id, userMacroId: userMacroId, JWT: task.JWT });
 }
 
 async function dispatchTask(task: MasterMessage) {

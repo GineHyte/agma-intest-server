@@ -54,9 +54,9 @@ export async function up(db: Kysely<any>) {
     .addColumn('userMacroId', 'varchar(255)', (col) => col.notNull())
     .addColumn('JWT', 'varchar(255)', (col) => col.notNull())
     .addColumn('resultMessage', 'text', (col) => col)
-    .addColumn('success', 'integer', (col) => col)
+    .addColumn('status', 'text', (col) => col.notNull().defaultTo('pending')) 
     .addColumn('entries', 'text', (col) => col)
-    .addColumn('createdAt', 'integer', (col) => col.notNull())
+    .addColumn('startedAt', 'integer', (col) => col)
     .addColumn('completedAt', 'integer', (col) => col)
     .addColumn('string', 'text', (col) => col)
     .addForeignKeyConstraint(

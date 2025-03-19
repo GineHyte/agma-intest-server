@@ -18,7 +18,7 @@ export async function checkAuth(JWT: string): Promise<boolean> {
         .selectAll()
         .where('JWT', '=', JWT)
         .executeTakeFirst();
-    if (!session) { 
+    if (!session) {
         await systemLogger.error('Session not found: ' + JWT.slice(0, 10) + '...');
         return false;
     }
@@ -27,4 +27,24 @@ export async function checkAuth(JWT: string): Promise<boolean> {
         return false;
     }
     return true;
+}
+
+export const ResponseStatus: { [key in Status]: number } = {
+    "pending": 1,
+    "running": 2,
+    "completed": 3,
+    "failed": 4
+}
+
+
+export function formatTimestamp(timestamp: number): { date: string, time: string } {
+    const date = new Date(timestamp);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    return { date: `${year}${month}${day}`, time: `${hours}:${minutes}:${seconds}` };
 }

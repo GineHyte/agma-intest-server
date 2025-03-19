@@ -16,10 +16,12 @@ export default class Painter {
     tableName: string = '';
     tableHeaders: string[] = [];
     tableRowsCallback: (data: any) => string[][] = () => [];
+    tableWhereCallback: (db: any) => any = (db) => db;
     tableOffset: number = 0;
     tableLimit: number = 0;
     tableTotal: number = 0;
     db: Kysely<Database>;
+    private inputMode: boolean = false;
 
     constructor() {
         this.rl = readline.createInterface({
@@ -38,6 +40,9 @@ export default class Painter {
 
         // Setup input handling
         process.stdin.on("keypress", (char, evt) => {
+            if (this.inputMode) {
+                return;
+            }
             this.handleKeyPress(evt.name);
         });
 
@@ -54,6 +59,24 @@ export default class Painter {
             dialect
         })
 
+    }
+
+    public async getUserInput(message: string) {
+        process.stdin.setRawMode(false);
+        this.inputMode = true;
+        await new Promise<string>((resolve) => {
+            this.rl.question("Press Enter to continue...", (answer: string) => {
+                resolve(answer);
+            });
+        });
+        const input = await new Promise<string>((resolve) => {
+            this.rl.question(message, (answer: string) => {
+                resolve(answer);
+            });
+        });
+        process.stdin.setRawMode(true);
+        this.inputMode = false;
+        return input;
     }
 
     public static get instance(): Painter {
@@ -134,24 +157,34 @@ export default class Painter {
         headers: string[],
         rowsCallback: (data: any) => string[][],
         offset: number = 0,
-        limit: number = 0
+        limit: number = 0,
+        whereCallback: (db: any) => any = (db) => db
     ) {
-        let data = await this.db.selectFrom(tableName as keyof Database).selectAll().offset(offset).limit(limit).execute();
-        let total = (await this.db.selectFrom(tableName as keyof Database).select(this.db.fn.countAll().as("count")).executeTakeFirstOrThrow()).count;
+        let data = await whereCallback(this.db.selectFrom(tableName as keyof Database).selectAll()).offset(offset).limit(limit).execute();
+        if (data.length === 0) {
+            this.println("No data found.");
+            return;
+        }
+        let total = await whereCallback(
+            this.db.selectFrom(tableName as keyof Database).select(this.db.fn.countAll().as("count"))
+        )
+            .executeTakeFirstOrThrow();
+        total = total.count; 
         this.tableMode = true;
         // save the table data for redrawTable with new offset
         this.tableName = tableName;
         this.tableHeaders = headers;
         this.tableRowsCallback = rowsCallback;
+        this.tableWhereCallback = whereCallback;
         this.tableOffset = offset;
         this.tableLimit = limit;
         this.tableTotal = total as number;
-        
+
         let table = new AsciiTable3(tableName)
             .setHeading(...headers)
             .setAlign(3, AlignmentEnum.CENTER)
             .addRowMatrix(rowsCallback(data));
-        
+
         // Instead of using println which adds to buffer and redraws
         // Just write directly to stdout
         process.stdout.write(table.toString() + '\n');
@@ -160,7 +193,7 @@ export default class Painter {
 
     public async redrawTable() {
         this.mvCur(1, 1);
-        await this.drawTable(this.tableName, this.tableHeaders, this.tableRowsCallback, this.tableOffset, this.tableLimit);
+        await this.drawTable(this.tableName, this.tableHeaders, this.tableRowsCallback, this.tableOffset, this.tableLimit, this.tableWhereCallback);
     }
 }
 

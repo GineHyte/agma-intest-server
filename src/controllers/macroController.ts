@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import Logger, { systemLogger } from '../logger.ts';
-import { checkAuth } from '../utils.ts';
+import { checkAuth, formatTimestamp } from '../utils.ts';
 import TestMaster from '../tester/master.ts';
 import { db } from '../database.ts';
+import { ResponseStatus } from '../utils.ts';
 
 
 export async function postMacro(req: Request, res: Response): Promise<void> {
@@ -35,7 +36,6 @@ export async function postMacro(req: Request, res: Response): Promise<void> {
             userMacroId: MACROID,
             JWT,
             entries: JSON.stringify(entries),
-            createdAt: Date.now(),
             string: string
         }).execute();
 
@@ -67,22 +67,38 @@ export async function getMacro(req: Request, res: Response): Promise<void> {
         }
 
         const { MACROID } = req.params;
-        await logger.log('Erhaltene Anfrage:', MACROID);
+        await logger.log('Erhaltene Get Macro Anfrage:', MACROID);
         if (!MACROID) {
             res.status(400).json({ status: 400, message: 'MACROID ist nicht vorhandelt!' });
             return;
         }
 
         const macro = await db.selectFrom('macro')
-            .select(['resultMessage', "success"])
+            .select(['resultMessage', "status", "startedAt", "completedAt"])
             .where("JWT", "==", JWT)
             .where("userMacroId", "==", MACROID)
             .executeTakeFirst();
-        if (macro === undefined) {
+        if (macro === undefined || !macro.status) {
             res.status(404).json({ status: 404, message: 'MACROID ist nicht vorhandelt!' });
             return;
         }
-        res.status(200).json({ status: 200, message: macro.resultMessage, success: macro.success });
+        let response: any = {
+            status: 200,
+            message: macro.resultMessage,
+            testStatus: ResponseStatus[macro.status]
+        }
+        if (macro.startedAt) {
+            let startedAt = formatTimestamp(macro.startedAt);
+            response.startedAtDate = startedAt.date;
+            response.startedAtTime = startedAt.time;
+        } 
+        if (macro.completedAt) {
+            let completedAt = formatTimestamp(macro.completedAt);
+            response.completedAtDate = completedAt.date;
+            response.completedAtTime = completedAt.time;
+        }
+
+        res.status(200).json(response);
     } catch (error) {
         await systemLogger.error('Fehler bei Ausführung:', error);
         res.status(500).json({ 
