@@ -114,9 +114,11 @@ export default class Tester {
     }
 
     async klicken(selector: string, options?: Readonly<ClickOptions>): Promise<void> {
+        selector = this.replaceAllVariables(selector);
         await this.halten(this.haltZeit);
         await this.logger.log("Klicke auf Element: " + selector);
-        return await this.page.click(selector, options);
+        let element = await this.$(selector);
+        return await element.click(options);
     }
 
     async klickenButton(buttonLabel: string) {
@@ -156,8 +158,15 @@ export default class Tester {
     }
 
     async logout() {
+        await this.logger.log("Abmeldung...");
+        let counter = 0;
         // Zurück zum Hauptbildschirm
         while ((await this.getAktWindowID()) !== '') {
+            counter++;
+            if (counter > 100) {
+                this.logger.error("Fehler beim Abmelden");
+                return;
+            }
             await this.drucken('Escape');
             await this.halten(10); // Kurze Pause zwischen Escape-Drücken
         }
@@ -204,5 +213,10 @@ export default class Tester {
 
     async wartenBisMaskeGeladen() {
         await this.$(`[id="${await this.getAktWindowID()}-body"]`);
+    }
+
+    private replaceAllVariables(str: string) {
+        let res = str.replaceAll('||JBN||', this.appStatus.job.toString());
+        return res;
     }
 }

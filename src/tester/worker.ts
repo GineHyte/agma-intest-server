@@ -67,7 +67,7 @@ async function processWorkerTask(task: MasterMessage) {
                     try {
                         switch (entry.type) {
                             case 'M': // maus
-                                await tester.klicken(`[id=${entry.key}]`);
+                                await tester.klicken(`[id="${entry.key}"]`);
                                 break;
                             case 'T': // tippen
                                 await tester.drucken(entry.key);
@@ -95,6 +95,7 @@ async function processWorkerTask(task: MasterMessage) {
             // Create a new browser context to avoid session token conflicts
             context = await browser.createBrowserContext();
             page = await context.newPage();
+            page.setDefaultTimeout(config.elementTimeout);
             recorder = new Recorder(page, workerLogger);
             tester = new Tester(page, workerLogger);
             await page.goto(config.url + "?Device=" + device);

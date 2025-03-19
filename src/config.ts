@@ -17,12 +17,13 @@ const config = {
     "kennwort": process.env.KENNWORT || "",
     "defaultMediaPath": "media/",
     "defaultLogPath": "logs/",
-    "haltZeit": 200,
+    "haltZeit": 500,
     "tippenZeit": 10,
     "databasePath": "database.db",
     "jwtExpires": 1000 * 60 * 60 * 24, // 24 hours
     "jwtSecret": process.env.JWT_SECRET || "",
-    "workerCount": 1
+    "workerCount": 1,
+    "elementTimeout": 5000,
 }
 
 export default config;
