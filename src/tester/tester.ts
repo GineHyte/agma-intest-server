@@ -18,6 +18,9 @@ export default class Tester {
     private logger!: Logger;
     private page: Page;
     private tippenZeit: number;
+    private elementIdsMapping!: { [key: string]: string }
+
+
     constructor(
         page: Page,
         logger: Logger,
@@ -50,18 +53,6 @@ export default class Tester {
             throw new Error("Element not found: " + selector);
         }
         return element;
-    }
-
-    async $$<Selector extends string>(selector: Selector): Promise<ElementHandle<NodeFor<Selector>>[]> {
-        return await this.page.$$(selector);
-    }
-
-    async $$eval<
-        Selector extends string,
-        Params extends unknown[],
-        Func extends EvaluateFuncWith<Array<NodeFor<Selector>>, Params> = EvaluateFuncWith<Array<NodeFor<Selector>>, Params>>
-        (selector: Selector, pageFunction: Func | string, ...args: Params): Promise<Awaited<ReturnType<Func>>> {
-        return await this.page.$$eval(selector, pageFunction, ...args);
     }
 
     async $eval(selector: string, pageFunction: EvaluateFuncWith<any, any[]>, ...args: any): Promise<any> {
@@ -114,7 +105,7 @@ export default class Tester {
     }
 
     async klicken(selector: string, options?: Readonly<ClickOptions>): Promise<void> {
-        selector = this.replaceAllVariables(selector);
+        selector = this.replaceAllElementsIds(selector);
         await this.halten(this.haltZeit);
         await this.logger.log("Klicke auf Element: " + selector);
         let element = await this.$(selector);
@@ -123,7 +114,7 @@ export default class Tester {
 
     async klickenButton(buttonLabel: string) {
         let rightButton: any;
-        let buttons = (await this.$$eval(`a[id^="${await this.getAktWindowID()}_BUT"]`,
+        let buttons = (await this.page.$$eval(`a[id^="${await this.getAktWindowID()}_BUT"]`,
             (els: HTMLAnchorElement[]) => els.map(el => { return { "id": el.id, "text": el.textContent?.split(" ")[0], "disabled": el.ariaDisabled } }))
         ) as { id: string, text: string, disabled: string }[];
         for (let button of buttons) {
@@ -215,8 +206,21 @@ export default class Tester {
         await this.$(`[id="${await this.getAktWindowID()}-body"]`);
     }
 
-    private replaceAllVariables(str: string) {
+    private replaceAllElementsIds(str: string) {
         let res = str.replaceAll('||JBN||', this.appStatus.job.toString());
         return res;
+    }
+
+    private async mapAllElementsIds() {
+        this.elementIdsMapping['ALERT-CLOSE'] = await this.page.evaluate(() => {
+            // @ts-ignore (wird bei Frontend ausgeführt)
+            Ext.MessageBox.show();
+            // @ts-ignore (wird bei Frontend ausgeführt)
+            Ext.MessageBox.hide();
+            // @ts-ignore (wird bei Frontend ausgeführt)
+            return Ext.MessageBox.el.dom.querySelector('[data-ref=toolEl]') // Schliessen Taste
+        });
+        this.elementIdsMapping['JBN'] = this.appStatus.job.toString();
+
     }
 }

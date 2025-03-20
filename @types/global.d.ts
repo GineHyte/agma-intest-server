@@ -10,6 +10,7 @@ declare global {
         mandant: string;
         jobverwaltungStatus: boolean; // true = aktiv, false = inaktiv
     }
+
     interface Window {
         AppStatus: string[];
         windowID: string;
@@ -28,6 +29,7 @@ declare global {
     type Status = "pending" | "running" | "completed" | "failed";
     type Level = "info" | "warn" | "error";
     type Action = string | "teardown" | "init" | "test";
+
     interface WorkerMessage {
         status: Status;
         action: Action;
@@ -43,8 +45,6 @@ declare global {
         type: KeyType;
         key: KeyInput;
     }
-
-
 
     interface MasterMessage {
         action: Action;
