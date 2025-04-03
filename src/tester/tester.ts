@@ -18,7 +18,6 @@ export default class Tester {
     private logger!: Logger;
     private page: Page;
     private tippenZeit: number;
-    private elementIdsMapping!: { [key: string]: string }
 
 
     constructor(
@@ -112,30 +111,6 @@ export default class Tester {
         return await element.click(options);
     }
 
-    async klickenButton(buttonLabel: string) {
-        let rightButton: any;
-        let buttons = (await this.page.$$eval(`a[id^="${await this.getAktWindowID()}_BUT"]`,
-            (els: HTMLAnchorElement[]) => els.map(el => { return { "id": el.id, "text": el.textContent?.split(" ")[0], "disabled": el.ariaDisabled } }))
-        ) as { id: string, text: string, disabled: string }[];
-        for (let button of buttons) {
-            this.logger.log("Suchen Button: " + button.text + " nach " + buttonLabel);
-            if (button.text.trim() === buttonLabel) {
-                this.logger.log("Button gefunden: " + button.text);
-                rightButton = button;
-                break;
-            }
-        }
-        if (!rightButton) {
-            this.logger.error("Button nicht gefunden: " + buttonLabel);
-            return;
-        }
-        if (rightButton.disabled === 'true') {
-            this.logger.error("Button ist disabled: " + buttonLabel);
-            return;
-        }
-        await this.klicken(`a[id="${rightButton.id}"]`);
-    }
-
     async login() {
         await this.logger.log("Anmeldung...");
         await this.tippen(config.bediener, '[data-componentid=name]', { delay: this.tippenZeit });
@@ -162,7 +137,7 @@ export default class Tester {
             await this.halten(10); // Kurze Pause zwischen Escape-Drücken
         }
         await this.programmaufruf("000");
-        await this.warten('input[value="zum Login"]'); // warten auf zum Login Button
+        await this.$('input[value="zum Login"]'); // warten auf zum Login Button
         await this.logger.log("logout done!");
     }
 
@@ -182,6 +157,7 @@ export default class Tester {
     async programmaufruf(menuepunkt: string) {
         await this.logger.log("Programmaufruf: " + menuepunkt);
         await this.page.evaluate((menuepunkt) => window.programmaufruf(menuepunkt), menuepunkt);
+        await this.halten(this.haltZeit);
     }
 
     async tippen(text: string, selector: string | undefined = undefined, options?: Readonly<KeyboardTypeOptions>): Promise<void> {
@@ -197,11 +173,6 @@ export default class Tester {
         await this.drucken('Enter');
     }
 
-    async warten<Selector extends string>(selector: Selector, options?: WaitForSelectorOptions): Promise<ElementHandle<NodeFor<Selector>> | null> {
-        await this.logger.log("Warte auf Element: " + selector);
-        return await this.page.waitForSelector(selector, options);
-    }
-
     async wartenBisMaskeGeladen() {
         await this.$(`[id="${await this.getAktWindowID()}-body"]`);
     }
@@ -211,16 +182,40 @@ export default class Tester {
         return res;
     }
 
-    private async mapAllElementsIds() {
-        this.elementIdsMapping['ALERT-CLOSE'] = await this.page.evaluate(() => {
-            // @ts-ignore (wird bei Frontend ausgeführt)
-            Ext.MessageBox.show();
-            // @ts-ignore (wird bei Frontend ausgeführt)
-            Ext.MessageBox.hide();
-            // @ts-ignore (wird bei Frontend ausgeführt)
-            return Ext.MessageBox.el.dom.querySelector('[data-ref=toolEl]') // Schliessen Taste
-        });
-        this.elementIdsMapping['JBN'] = this.appStatus.job.toString();
-
+    async testStep(key: string, type: string) {
+        let windowID = await this.getAktWindowID()
+        switch (type) {
+            case 'M': // maus
+                await this.klicken(`[id="${key}"]`);
+                break;
+            case 'T': // tastatur
+                await this.drucken(key as KeyInput);
+                break;
+            case 'P': // menuepunkt 
+                await this.programmaufruf(key);
+                break;
+            case 'MAVBTN': // MAske Vertikale BuTtoN 
+                let klickId = await this.page.evaluate((ctrl: string) => {
+                    let butbar = window.Ext.getCmp(`${windowID}butbar`)
+                    let items = butbar.items.items
+                    let butmap: any = {};
+                    items.forEach((el: any) => {
+                        butmap[el.cspConfig.badge.trim()] = el.cspConfig.idnr.trim()
+                    });
+                    return butmap[ctrl]
+                }, key)
+                await this.klicken(`[id="${windowID}_${klickId}"]`)
+                break;
+            case 'MFBTN':
+                for (let i = 0; i < parseInt(key); i++) {
+                    await this.drucken("ArrowDown");
+                }
+                await this.drucken("Enter");
+                break;
+            case 'MFSCHL':
+                await this.drucken('Escape');
+                break;
+            
+        }
     }
 }

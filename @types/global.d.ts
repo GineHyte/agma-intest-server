@@ -39,7 +39,7 @@ declare global {
         id: number;
     }
 
-    type KeyType = "M" | "T" | "P";
+    type KeyType = "M" | "T" | "P" | "MAVBTN" | "MFBTN" | "MATKLCK" | "MATDBLKLCK" | "MATHEADKLCK" | "MFSCHL" | "ALERTSCHL";
 
     interface Entry {
         type: KeyType;

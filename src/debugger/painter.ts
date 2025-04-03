@@ -188,7 +188,7 @@ export default class Painter {
         // Instead of using println which adds to buffer and redraws
         // Just write directly to stdout
         process.stdout.write(table.toString() + '\n');
-        process.stdout.write(`\n<${offset + 1}/${total}>\n`);
+        process.stdout.write(`\n<${offset + 1}-${offset + data.length}/${total}>\n`);
     }
 
     public async redrawTable() {

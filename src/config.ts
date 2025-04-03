@@ -17,7 +17,7 @@ const config = {
     "kennwort": process.env.KENNWORT || "",
     "defaultMediaPath": "media/",
     "defaultLogPath": "logs/",
-    "haltZeit": 500,
+    "haltZeit": 100,
     "tippenZeit": 10,
     "databasePath": "database.db",
     "jwtExpires": 1000 * 60 * 60 * 24, // 24 hours

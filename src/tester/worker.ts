@@ -2,7 +2,7 @@ import { workerData, parentPort } from 'worker_threads';
 import config from '../config.ts';
 import puppeteer from 'puppeteer';
 import Tester from './tester.ts';
-import Logger, { systemLogger } from '../logger.ts';
+import Logger from '../logger.ts';
 import Recorder from '../recorder.ts';
 
 var tester: Tester;
@@ -14,8 +14,6 @@ var workerLogger: Logger;
 var browserWSEndpoint: string;
 var device: string;
 var id: number;
-var currentAction: Action = 'init';
-var currentStatus: Status = 'pending';
 var userMacroId: string;
 
 
@@ -43,8 +41,6 @@ function postMessage(arg0: WorkerMessage) {
 
 async function processWorkerTask(task: MasterMessage) {
     const action = task.action;
-    currentAction = action;
-    currentStatus = 'running';
     postMessage({ status: 'running', action: action, id: workerData.id, userMacroId: task.userMacroId, JWT: task.JWT });
     await workerLogger.log('Worker has received ' + action + ' signal.');
     switch (action) {
@@ -53,43 +49,7 @@ async function processWorkerTask(task: MasterMessage) {
             await recorder.stopRecording();
             break;
         case 'test':
-            await workerLogger.log('UserMacroId: ' + task.userMacroId);
-            if (task.userMacroId === undefined) {
-                await workerLogger.error('Fehler bei Ausführung:', 'userMacroId ist nicht vorhanden!');
-                postMessage({ status: 'failed', action: action, message: 'userMacroId ist nicht vorhanden!', id: workerData.id });
-                return;
-            }
-            userMacroId = task.userMacroId;
-            if (task.entries) {
-                const entries = task.entries;
-                await tester.halten(500);
-                for (const entry of entries) {
-                    try {
-                        switch (entry.type) {
-                            case 'M': // maus
-                                await tester.klicken(`[id="${entry.key}"]`);
-                                break;
-                            case 'T': // tippen
-                                await tester.drucken(entry.key);
-                                break;
-                            case 'P': // menuepunkt 
-                                await tester.programmaufruf(entry.key);
-                                break;
-                        }
-                    } catch (error) {
-                        let message: string = '[Eintrag: ' + JSON.stringify(entry) + '] ';
-                        message += error instanceof Error ? error.message : 'Internal Server Error';
-                        await workerLogger.error('Fehler bei Ausführung:', message);
-                        postMessage({ status: 'failed', action: action, message: message, id: workerData.id, userMacroId: userMacroId, JWT: task.JWT });
-                        postMessage({ status: 'running', action: 'init', id: workerData.id });
-                        await tester.logout();
-                        await workerLogger.log("Führen relogin Funktion aus nach dem Fehler...");
-                        await tester.relogin();
-                        postMessage({ status: 'completed', action: 'init', message: "Erfolg!", id: workerData.id });
-                        return;
-                    }
-                }
-            }
+            await testHandler(task);
             break;
         case 'init':
             // Create a new browser context to avoid session token conflicts
@@ -110,4 +70,35 @@ async function processWorkerTask(task: MasterMessage) {
 async function dispatchTask(task: MasterMessage) {
     await workerLogger.setJWT(task.JWT);
     await processWorkerTask(task);
+}
+
+
+async function testHandler(task: MasterMessage) {
+    await workerLogger.log('UserMacroId: ' + task.userMacroId);
+    if (task.userMacroId === undefined) {
+        await workerLogger.error('Fehler bei Ausführung:', 'userMacroId ist nicht vorhanden!');
+        postMessage({ status: 'failed', action: task.action, message: 'userMacroId ist nicht vorhanden!', id: workerData.id });
+        return;
+    }
+    userMacroId = task.userMacroId;
+    if (task.entries) {
+        const entries = task.entries;
+        await tester.halten(500);
+        for (const entry of entries) {
+            try {
+                await tester.testStep(entry.key, entry.type)
+            } catch (error) {
+                let message: string = '[Eintrag: ' + JSON.stringify(entry) + '] ';
+                message += error instanceof Error ? error.message : 'Internal Server Error';
+                await workerLogger.error('Fehler bei Ausführung:', message);
+                postMessage({ status: 'failed', action: task.action, message: message, id: workerData.id, userMacroId: userMacroId, JWT: task.JWT });
+                postMessage({ status: 'running', action: 'init', id: workerData.id });
+                await tester.logout();
+                await workerLogger.log("Führen relogin Funktion aus nach dem Fehler...");
+                await tester.relogin();
+                postMessage({ status: 'completed', action: 'init', message: "Erfolg!", id: workerData.id });
+                return;
+            }
+        }
+    }
 }
