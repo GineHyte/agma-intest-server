@@ -259,7 +259,15 @@ export default class Tester {
                 await this.klicken(`[class="${selectorForClick}"]`, { count: 2 })
                 break;
             case 'MATHEADKLCK':
-
+                var selectroForClick = await this.page.evaluate((col: number) => {
+                    let senchagrid = window.grid[window.windIdx];
+                    return senchagrid.columns[col].id;
+                }, parseInt(key))
+                await this.klicken(`[id="${selectroForClick}"]`)
+                break;
+            case 'ALERTSCHL':
+                var selectroForClick = await this.page.evaluate(() => window.Ext.Msg.down('button').el.dom.id)
+                await this.klicken(`a[id="${selectroForClick}"]`)
                 break;
         }
     }

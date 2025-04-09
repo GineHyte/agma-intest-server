@@ -87,8 +87,10 @@ declare global {
             entries?: string // JSON string
             screencastFlag?: boolean
             screencastPath?: string
+            screencastName?: string
             logFlag?: boolean
             logPath?: string
+            logName?: string
             startedAt?: number
             completedAt?: number
             workerId?: number

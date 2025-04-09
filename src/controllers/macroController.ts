@@ -20,7 +20,7 @@ export async function postMacro(req: Request, res: Response): Promise<void> {
             res.status(401).json({ status: 401, message: 'Unauthorized' });
             return;
         }
-        
+
         const { entries, string, screencastFlag, screencastPath, logFlag, logPath } = req.body;
         const { MACROID } = req.params;
         if (!Array.isArray(entries) || entries.length === 0) {
@@ -43,14 +43,23 @@ export async function postMacro(req: Request, res: Response): Promise<void> {
             logPath,
         }).execute();
 
-        await TestMaster.instance.pushTask({ action: 'test', entries, JWT, userMacroId: MACROID });
+        await TestMaster.instance.pushTask({
+            action: 'test',
+            entries,
+            JWT,
+            screencastFlag,
+            screencastPath,
+            logFlag,
+            logPath,
+            userMacroId: MACROID
+        });
         await TestMaster.instance.pushTask({ action: 'endtest', JWT, userMacroId: MACROID });
-        
-        res.status(200).json({ status: 200, message: 'OK'});
+
+        res.status(200).json({ status: 200, message: 'OK' });
     } catch (error) {
         await systemLogger.error('Fehler bei Ausführung:', error);
-        res.status(500).json({ 
-            status: 500, 
+        res.status(500).json({
+            status: 500,
             message: error instanceof Error ? error.message : 'Internal Server Error'
         });
     }
@@ -96,7 +105,7 @@ export async function getMacro(req: Request, res: Response): Promise<void> {
             let startedAt = formatTimestamp(macro.startedAt);
             response.startedAtDate = startedAt.date;
             response.startedAtTime = startedAt.time;
-        } 
+        }
         if (macro.completedAt) {
             let completedAt = formatTimestamp(macro.completedAt);
             response.completedAtDate = completedAt.date;
@@ -106,8 +115,8 @@ export async function getMacro(req: Request, res: Response): Promise<void> {
         res.status(200).json(response);
     } catch (error) {
         await systemLogger.error('Fehler bei Ausführung:', error);
-        res.status(500).json({ 
-            status: 500, 
+        res.status(500).json({
+            status: 500,
             message: error instanceof Error ? error.message : 'Internal Server Error'
         });
     }

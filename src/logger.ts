@@ -56,8 +56,14 @@ export default class Logger {
      */
     async dumpProtocolToFile(name: string): Promise<void> {
         if (!this.logFlag) { return }
-        const protocol = await db.selectFrom('protocol').execute();
-
+        const protocol = await db.selectFrom('protocol').selectAll().execute();
+        // Delete protocol records for this JWT and workerId after retrieving them
+        if (this.JWT !== undefined && this.workerId !== undefined) {
+            await db.deleteFrom('protocol')
+                .where('JWT', '=', this.JWT)
+                .where('workerId', '=', this.workerId)
+                .execute();
+        }
         // Create directory if it doesn't exist
         const directory = path.dirname(this.logPath);
         if (!fs.existsSync(directory) && directory !== '') {
@@ -75,7 +81,7 @@ export default class Logger {
      */
     async error(message?: any, ...optionalParams: any[]): Promise<void> {
         const actualMessage: string = this.formatMessage(message, optionalParams);
-        let prefix = '[ERROR';
+        let prefix = '\x1b[1;31m[ERROR';
         if (this.JWT !== undefined) {
             prefix += ' | ' + this.JWT.slice(0, 8);
         }
@@ -83,7 +89,7 @@ export default class Logger {
             prefix += ' | Worker ' + this.workerId;
         }
 
-        console.log(prefix + '] ' + actualMessage);
+        console.log(prefix + '] ' + actualMessage + '\x1b[0m');
         await this.pushToDatabase(actualMessage, 'error');
     }
 
@@ -95,7 +101,7 @@ export default class Logger {
      */
     async log(message?: any, ...optionalParams: any[]): Promise<void> {
         const actualMessage: string = this.formatMessage(message, optionalParams);
-        let prefix = '[INFO';
+        let prefix = '\x1b[0m[INFO';
         if (this.JWT !== undefined) {
             prefix += ' | ' + this.JWT.slice(0, 8);
         }
@@ -135,7 +141,7 @@ export default class Logger {
      */
     async warn(message?: any, ...optionalParams: any[]): Promise<void> {
         const actualMessage: string = this.formatMessage(message, optionalParams);
-        let prefix = '[WARN';
+        let prefix = '\x1b[1;33m[WARN';
         if (this.JWT !== undefined) {
             prefix += ' | ' + this.JWT.slice(0, 8);
         }
@@ -143,8 +149,27 @@ export default class Logger {
             prefix += ' | Worker ' + this.workerId;
         }
 
-        console.log(prefix + '] ' + actualMessage);
+        console.log(prefix + '] ' + actualMessage + '\x1b[0m');
         await this.pushToDatabase(actualMessage, 'warn');
+    }
+
+    /**
+     * Logs a debug message to the console
+     * @param message - The primary warning message to log
+     * @param optionalParams - Additional parameters to include in the log message
+     * @returns Promise that resolves when the log operation is complete
+     */
+    async debug(message?: any, ...optionalParams: any[]): Promise<void> {
+        const actualMessage: string = this.formatMessage(message, optionalParams);
+        let prefix = '\x1b[0;97;44m[DEBUG';  // For bright white text
+        if (this.JWT !== undefined) {
+            prefix += ' | ' + this.JWT.slice(0, 8);
+        }
+        if (this.workerId !== undefined) {
+            prefix += ' | Worker ' + this.workerId;
+        }
+
+        console.log(prefix + '] ' + actualMessage + '\x1b[0m');
     }
 }
 

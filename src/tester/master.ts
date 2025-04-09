@@ -65,7 +65,8 @@ export default class TestMaster {
      * @param id Die ID des betroffenen Workers.
      */
     private async workerErrorHandler(error: Error, id?: number) {
-        await systemLogger.error('Unbehandelter Fehler in Worker [', id === undefined ? id : '', ']: ', error);
+        await systemLogger.error('Unbehandelter Fehler in Worker [', id === undefined ? id : '', ']: ', JSON.stringify(error));
+        await systemLogger.error('Process stack: ', new Error().stack)
     }
 
     /**
@@ -105,6 +106,8 @@ export default class TestMaster {
                 let newMacro: any = {
                     resultMessage: message,
                     status: status,
+                    screencastName: handlerPayload.screencastName,
+                    logName: handlerPayload.logName,
                     entries: JSON.stringify(handlerPayload.entries),
                 }
                 if (status === 'running' || status === 'pending') {
@@ -159,9 +162,11 @@ export default class TestMaster {
                 }
             });
 
+            const workerId = i;
+
             // Alle Kommunikationsereignisse registrieren
             worker.on('error', async (error) => {
-                await this.workerErrorHandler(error, i);
+                await this.workerErrorHandler(error, workerId);
             });
             worker.on('message', async (message) => {
                 await this.workerMessageHandler(message);
@@ -211,10 +216,11 @@ export default class TestMaster {
             let workers = await db.selectFrom('worker').select(['id', 'status']).execute();
             for (let worker of workers) { // Suche nach verfügbaren Workern
                 if (worker.status === 'running' || worker.status === 'pending') { continue; } // Worker ist bereits beschäftigt
-                await systemLogger.log('free worker found!', worker.id)
                 let workerObject = this.workers[worker.id];
                 let task = this.tasks.shift();
+                await systemLogger.log('free worker found!', worker.id, JSON.stringify(task))
                 workerObject.postMessage(task);
+                await systemLogger.log("SETTING STATUS PENDING ON WORKER!!!!!", JSON.stringify(workerObject))
                 await db.updateTable('worker')
                     .where("id", "=", worker.id)
                     .set({

@@ -59,6 +59,8 @@ export async function up(db: Kysely<any>) {
     .addColumn('screencastPath', 'text', (col) => col.notNull().defaultTo(config.defaultScreencastPath))
     .addColumn('logFlag', 'boolean', (col) => col.notNull().defaultTo(config.defaultLogFlag))
     .addColumn('logPath', 'text', (col) => col.notNull().defaultTo(config.defaultLogPath))
+    .addColumn('screencastName', 'text', (col) => col)
+    .addColumn('logName', 'text', (col) => col)
     .addColumn('entries', 'text', (col) => col)
     .addColumn('startedAt', 'integer', (col) => col)
     .addColumn('completedAt', 'integer', (col) => col)
