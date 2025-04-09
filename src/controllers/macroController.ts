@@ -21,7 +21,7 @@ export async function postMacro(req: Request, res: Response): Promise<void> {
             return;
         }
         
-        const { entries, string } = req.body;
+        const { entries, string, screencastFlag, screencastPath, logFlag, logPath } = req.body;
         const { MACROID } = req.params;
         if (!Array.isArray(entries) || entries.length === 0) {
             res.status(400).json({ status: 400, message: 'Es soll mehr als 0 entries in body eingeben werden!' });
@@ -36,10 +36,15 @@ export async function postMacro(req: Request, res: Response): Promise<void> {
             userMacroId: MACROID,
             JWT,
             entries: JSON.stringify(entries),
-            string: string
+            string: string,
+            screencastFlag,
+            screencastPath,
+            logFlag,
+            logPath,
         }).execute();
 
-        TestMaster.instance.pushTask({ action: 'test', entries, JWT, userMacroId: MACROID });
+        await TestMaster.instance.pushTask({ action: 'test', entries, JWT, userMacroId: MACROID });
+        await TestMaster.instance.pushTask({ action: 'endtest', JWT, userMacroId: MACROID });
         
         res.status(200).json({ status: 200, message: 'OK'});
     } catch (error) {

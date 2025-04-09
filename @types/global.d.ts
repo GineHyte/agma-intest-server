@@ -24,16 +24,20 @@ declare global {
         ausfuehrenAgmaIntest: () => void;
         aufnahmeListeAgmaIntest: any; // Ext.Panel
         Ext: any;
+        grid: any[];
+        windIdx: number
     }
 
     type Status = "pending" | "running" | "completed" | "failed";
     type Level = "info" | "warn" | "error";
-    type Action = string | "teardown" | "init" | "test";
+    type Action = string | "teardown" | "init" | "test" | "endtest";
 
     interface WorkerMessage {
         status: Status;
         action: Action;
         userMacroId?: string;
+        screencastName?: string;
+        logName?: string;
         JWT?: string;
         message?: string | unknown;
         id: number;
@@ -50,6 +54,10 @@ declare global {
         action: Action;
         JWT: string;
         userMacroId?: string;
+        screencastFlag?: boolean;
+        screencastPath?: string;
+        logFlag?: boolean;
+        logPath?: string;
         entries?: Entry[];
     }
 
@@ -77,6 +85,10 @@ declare global {
             resultMessage?: string
             status?: Status
             entries?: string // JSON string
+            screencastFlag?: boolean
+            screencastPath?: string
+            logFlag?: boolean
+            logPath?: string
             startedAt?: number
             completedAt?: number
             workerId?: number

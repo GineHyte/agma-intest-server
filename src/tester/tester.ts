@@ -18,6 +18,7 @@ export default class Tester {
     private logger!: Logger;
     private page: Page;
     private tippenZeit: number;
+    private currentTestStep: boolean = false;
 
 
     constructor(
@@ -182,8 +183,34 @@ export default class Tester {
         return res;
     }
 
+    async showCurrentStep(key: string, type: string) {
+        if (!this.currentTestStep) {
+            let html = `<div style="display:flex;justify-content:center;align-items:center;">
+                <span style="font-size:30px;flex: 0 0 120px" id="integration-test-label">${key} ${type}</span>
+            </div>`
+            await this.page.evaluate((html: string) => {
+                let panel = window.Ext.create('Ext.Panel', {
+                    floating: true,
+                    alwaysOnTop: true,
+                    renderTo: document.body,
+                    html: html,
+                    height: 50,
+                    width: 200,
+                    id: "integration-test-container",
+                })
+                panel.showAt(window.innerWidth - 200, 50)
+            }, html)
+            this.currentTestStep = true;
+            return
+        }
+        await this.$eval('span[id="integration-test-label"]', (span: any, key: string, type: string) => {
+            span.innerHTML = `${key} ${type}`
+        }, key, type)
+    }
+
     async testStep(key: string, type: string) {
         let windowID = await this.getAktWindowID()
+        await this.showCurrentStep(key, type)
         switch (type) {
             case 'M': // maus
                 await this.klicken(`[id="${key}"]`);
@@ -195,7 +222,7 @@ export default class Tester {
                 await this.programmaufruf(key);
                 break;
             case 'MAVBTN': // MAske Vertikale BuTtoN 
-                let klickId = await this.page.evaluate((ctrl: string) => {
+                var klickId = await this.page.evaluate((ctrl: string) => {
                     let butbar = window.Ext.getCmp(`${windowID}butbar`)
                     let items = butbar.items.items
                     let butmap: any = {};
@@ -215,7 +242,25 @@ export default class Tester {
             case 'MFSCHL':
                 await this.drucken('Escape');
                 break;
-            
+            case 'MATKLCK':
+                var pos = key.split("^")
+                var selectorForClick = await this.page.evaluate((col: number, row: number) => {
+                    let senchagrid = window.grid[window.windIdx];
+                    return senchagrid.view.el.dom.children[2].children[row].children[0].children[0].children[col].className
+                }, parseInt(pos[0]), parseInt(pos[1]))
+                await this.klicken(`[class="${selectorForClick}"]`)
+                break;
+            case 'MATDBLKLCK':
+                var pos = key.split("^")
+                var selectorForClick = await this.page.evaluate((col: number, row: number) => {
+                    let senchagrid = window.grid[window.windIdx];
+                    return senchagrid.view.el.dom.children[2].children[row].children[0].children[0].children[col].className
+                }, parseInt(pos[0]), parseInt(pos[1]))
+                await this.klicken(`[class="${selectorForClick}"]`, { count: 2 })
+                break;
+            case 'MATHEADKLCK':
+
+                break;
         }
     }
 }

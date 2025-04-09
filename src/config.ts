@@ -12,12 +12,14 @@ const config = {
         "width": 1920,
         "height": 1000
     },
-    "url": "https://srv-ent/csp/azu/AnmeldungiFood2.CSP",
+    "url": "http://localhost:52773/csp/azu/AnmeldungiFood2.CSP",
     "bediener": process.env.BEDIENER || "",
     "kennwort": process.env.KENNWORT || "",
-    "defaultMediaPath": "media/",
+    "defaultScreencastPath": "media/",
     "defaultLogPath": "logs/",
-    "haltZeit": 100,
+    "defaultScreencastFlag": false,
+    "defaultLogFlag": false,
+    "haltZeit": 200,
     "tippenZeit": 10,
     "databasePath": "database.db",
     "jwtExpires": 1000 * 60 * 60 * 24, // 24 hours

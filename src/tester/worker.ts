@@ -6,7 +6,7 @@ import Logger from '../logger.ts';
 import Recorder from '../recorder.ts';
 
 var tester: Tester;
-var recorder: Recorder;
+var workerRecorder: Recorder;
 var context: puppeteer.BrowserContext;
 var browser: puppeteer.Browser;
 var page: puppeteer.Page;
@@ -46,17 +46,22 @@ async function processWorkerTask(task: MasterMessage) {
     switch (action) {
         case 'teardown':
             await tester.logout();
-            await recorder.stopRecording();
+            await workerRecorder.stopRecording();
             break;
         case 'test':
             await testHandler(task);
+            break;
+        case 'endtest':
+            await tester.logout();
+            await workerRecorder.stopRecording();
+            await tester.relogin();
             break;
         case 'init':
             // Create a new browser context to avoid session token conflicts
             context = await browser.createBrowserContext();
             page = await context.newPage();
             page.setDefaultTimeout(config.elementTimeout);
-            recorder = new Recorder(page, workerLogger);
+            workerRecorder = new Recorder(page, workerLogger);
             tester = new Tester(page, workerLogger);
             await page.goto(config.url + "?Device=" + device);
             await page.setViewport(config.viewport);
@@ -64,7 +69,19 @@ async function processWorkerTask(task: MasterMessage) {
         default:
             break;
     }
-    postMessage({ status: 'completed', message: "Erfolg!", action: action, id: workerData.id, userMacroId: userMacroId, JWT: task.JWT });
+    workerRecorder.stopRecording();
+    workerLogger.dumpProtocolToFile(`W${workerData.id}-${Date.now().toLocaleString('de-DE')}`);
+    let msg: WorkerMessage = {
+        status: 'completed',
+        message: "Erfolg!",
+        action: action,
+        id: workerData.id,
+        userMacroId: userMacroId,
+        JWT: task.JWT,
+    };
+    if (workerLogger.logFlag) { msg.logName = workerLogger.logLastName }
+    if (workerRecorder.screencastFlag) { msg.screencastName = workerRecorder.screencastLastName }
+    postMessage(msg);
 }
 
 async function dispatchTask(task: MasterMessage) {
@@ -74,7 +91,11 @@ async function dispatchTask(task: MasterMessage) {
 
 
 async function testHandler(task: MasterMessage) {
-    await workerLogger.log('UserMacroId: ' + task.userMacroId);
+    if (task.logFlag !== undefined) { workerLogger.logFlag = task.logFlag; }
+    if (task.logPath !== undefined) { workerLogger.logPath = task.logPath; }
+    if (task.screencastFlag !== undefined) { workerRecorder.screencastFlag = task.screencastFlag; }
+    if (task.screencastPath !== undefined) { workerRecorder.screencastPath = task.screencastPath; }
+    await workerLogger.log('Starten UserMacroId: ' + task.userMacroId);
     if (task.userMacroId === undefined) {
         await workerLogger.error('Fehler bei Ausführung:', 'userMacroId ist nicht vorhanden!');
         postMessage({ status: 'failed', action: task.action, message: 'userMacroId ist nicht vorhanden!', id: workerData.id });
@@ -82,6 +103,7 @@ async function testHandler(task: MasterMessage) {
     }
     userMacroId = task.userMacroId;
     if (task.entries) {
+        workerRecorder.startRecording(`W${workerData.id}-${Date.now().toLocaleString('de-DE')}`);
         const entries = task.entries;
         await tester.halten(500);
         for (const entry of entries) {
@@ -91,12 +113,19 @@ async function testHandler(task: MasterMessage) {
                 let message: string = '[Eintrag: ' + JSON.stringify(entry) + '] ';
                 message += error instanceof Error ? error.message : 'Internal Server Error';
                 await workerLogger.error('Fehler bei Ausführung:', message);
-                postMessage({ status: 'failed', action: task.action, message: message, id: workerData.id, userMacroId: userMacroId, JWT: task.JWT });
-                postMessage({ status: 'running', action: 'init', id: workerData.id });
-                await tester.logout();
-                await workerLogger.log("Führen relogin Funktion aus nach dem Fehler...");
-                await tester.relogin();
-                postMessage({ status: 'completed', action: 'init', message: "Erfolg!", id: workerData.id });
+                workerRecorder.stopRecording();
+                workerLogger.dumpProtocolToFile(`W${workerData.id}-${Date.now().toLocaleString('de-DE')}`);
+                let msg: WorkerMessage = {
+                    status: 'failed',
+                    action: task.action,
+                    message: message,
+                    id: workerData.id,
+                    userMacroId: userMacroId,
+                    JWT: task.JWT
+                };
+                if (workerLogger.logFlag) { msg.logName = workerLogger.logLastName }
+                if (workerRecorder.screencastFlag) { msg.screencastName = workerRecorder.screencastLastName }
+                postMessage(msg);
                 return;
             }
         }

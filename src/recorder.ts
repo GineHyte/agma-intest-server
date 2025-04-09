@@ -10,26 +10,22 @@ import config from "./config.ts";
 export default class Recorder {
     private _recording?: any;
     private logger: Logger;
-    private mediaPath: string;
     private page: any;
+    screencastPath: string = config.defaultScreencastPath;
+    screencastFlag: boolean = config.defaultScreencastFlag;
+    screencastLastName: string | undefined;
+
+
     /**
      * Creates a new Recorder instance.
      * 
      * @param page - The browser page to record or screenshot (typically a Playwright Page object)
      * @param logger - Logger instance for recording operation statuses and errors
-     * @param mediaPath - Directory path where screenshots and recordings will be saved
+     * @param screencastPath - Directory path where screenshots and recordings will be saved
      */
-    constructor(page: any, logger: Logger, mediaPath: string = config.defaultMediaPath) {
+    constructor(page: any, logger: Logger) {
         this.page = page;
         this.logger = logger;
-        this.mediaPath = mediaPath;
-        try {
-            if (!fs.existsSync(this.mediaPath)) {
-                fs.mkdirSync(this.mediaPath, { recursive: true });
-            }
-        } catch (err) {
-            this.logger.error('Error creating directories: ', err);
-        }
     }
 
     /**
@@ -39,9 +35,10 @@ export default class Recorder {
      * @returns A Promise that resolves when the screenshot is saved
      */
     public async screenshot(name: string) {
+        if (!this.screencastFlag) { return }
         if (this.page) {
             await this.page.screenshot({
-                path: this.mediaPath + name + ".png",
+                path: this.screencastPath + name + ".png",
             });
             await this.logger.log("Screenshot saved: " + name + ".png");
         }
@@ -54,8 +51,14 @@ export default class Recorder {
      * @returns A Promise that resolves when recording has started
      */
     public async startRecording(name: string) {
+        if (!this.screencastFlag) { return }
+
         if (this.page) {
-            this._recording = await this.page.screencast({ path: `${this.mediaPath}${name}.webm` });
+            if (!fs.existsSync(this.screencastPath)) {
+                fs.mkdirSync(this.screencastPath, { recursive: true });
+            }
+            this.screencastLastName = name;
+            this._recording = await this.page.screencast({ path: `${this.screencastPath}${name}.webm` });
             await this.logger.log("Recording started: " + name + ".webm");
         }
     }
@@ -66,6 +69,7 @@ export default class Recorder {
      * @returns A Promise that resolves when recording has stopped
      */
     public async stopRecording() {
+        if (!this.screencastFlag) { return }
         if (this._recording) {
             await this._recording.stop();
             await this.logger.log("Recording stopped");

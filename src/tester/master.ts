@@ -117,7 +117,9 @@ export default class TestMaster {
                     .where("JWT", "==", JWT)
                     .where("userMacroId", "==", userMacroId)
                     .execute();
-                await systemLogger.log('Worker [', id, '] hat Test abgeschlossen.');
+                if (status === 'completed') {
+                    await systemLogger.log('Worker [', id, '] hat Test abgeschlossen.');
+                }
                 break;
             default:
                 break;
@@ -195,7 +197,7 @@ export default class TestMaster {
      * @param task Die hinzuzufügende Aufgabe.
      */
     public async pushTask(task: MasterMessage) {
-        await systemLogger.log('Füge Aufgabe hinzu: ', task.entries?.length);
+        await systemLogger.log('Füge Aufgabe hinzu!');
         this.tasks.push(task);
         await this.processTasks();
     }
@@ -204,13 +206,22 @@ export default class TestMaster {
      * Verarbeitet Aufgaben aus der Warteschlange und weist sie verfügbaren Workern zu.
      */
     public async processTasks() {
+        await systemLogger.log('processing workers tasks....', this.tasks.length)
         while (this.tasks.length > 0) {
             let workers = await db.selectFrom('worker').select(['id', 'status']).execute();
             for (let worker of workers) { // Suche nach verfügbaren Workern
-                if (worker.status === 'running') { continue; } // Worker ist bereits beschäftigt
+                if (worker.status === 'running' || worker.status === 'pending') { continue; } // Worker ist bereits beschäftigt
+                await systemLogger.log('free worker found!', worker.id)
                 let workerObject = this.workers[worker.id];
                 let task = this.tasks.shift();
                 workerObject.postMessage(task);
+                await db.updateTable('worker')
+                    .where("id", "=", worker.id)
+                    .set({
+                        threadId: workerObject.threadId,
+                        status: 'pending',
+                        message: 'waiting for status running...'
+                    }).execute();
                 break;
             }
             await new Promise((resolve) => setTimeout(resolve, 500));

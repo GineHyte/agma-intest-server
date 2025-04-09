@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { db } from "./database.ts";
+import config from "./config.ts";
+
 
 /**
  * Logger class for handling application logging with database integration.
@@ -11,6 +13,9 @@ export default class Logger {
     private JWT?: string | "system";
     /** Worker ID associated with the current logger session */
     workerId?: number;
+    logFlag: boolean = config.defaultLogFlag;
+    logPath: string = config.defaultLogPath;
+    logLastName: string | undefined;
 
     /**
      * Formats a message and its optional parameters into a single string
@@ -37,6 +42,7 @@ export default class Logger {
      * @private
      */
     private async pushToDatabase(message: string, level: 'info' | 'warn' | 'error' = 'info'): Promise<void> {
+        if (!this.logFlag) { return }
         if (this.JWT !== undefined) {
             await db.insertInto('protocol')
                 .values({ JWT: this.JWT, message: message, level: level, timestamp: Date.now(), workerId: this.workerId })
@@ -46,19 +52,19 @@ export default class Logger {
 
     /**
      * Exports all log entries from the database to a JSON file
-     * @param filename - Path to the output file
      * @returns Promise that resolves when the file write operation is complete
      */
-    async dumpProtocolToFile(filename: string): Promise<void> {
+    async dumpProtocolToFile(name: string): Promise<void> {
+        if (!this.logFlag) { return }
         const protocol = await db.selectFrom('protocol').execute();
 
         // Create directory if it doesn't exist
-        const directory = path.dirname(filename);
+        const directory = path.dirname(this.logPath);
         if (!fs.existsSync(directory) && directory !== '') {
             fs.mkdirSync(directory, { recursive: true });
         }
-
-        fs.writeFileSync(filename, JSON.stringify(protocol, null, 2));
+        this.logLastName = name;
+        fs.writeFileSync(this.logPath + name + ".txt", JSON.stringify(protocol, null, 2));
     }
 
     /**
