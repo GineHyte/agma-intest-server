@@ -3,32 +3,34 @@ import { systemLogger } from './logger.ts';
 
 
 /**
- * Validates the authentication status of a JSON Web Token (JWT).
+ * Überprüft den Authentifizierungsstatus eines JSON Web Tokens (JWT).
  * 
- * This function checks if the provided JWT exists in the database's session table.
- * It logs the validation attempt and sets the appropriate JWT for logging.
+ * Diese Funktion prüft, ob der bereitgestellte JWT in der Sitzungstabelle der Datenbank existiert.
+ * Sie protokolliert den Validierungsversuch und setzt den entsprechenden JWT für die Protokollierung.
  * 
- * @param JWT - The JSON Web Token string to validate
- * @returns A Promise that resolves to a boolean indicating whether the JWT is valid
- *          (true if a corresponding session exists in the database, false otherwise)
+ * @param JWT - Die zu validierende JSON Web Token-Zeichenfolge
+ * @returns Ein Promise, das zu einem Boolean aufgelöst wird, der angibt, ob der JWT gültig ist
+ *          (true, wenn eine entsprechende Sitzung in der Datenbank existiert, false andernfalls)
  */
 export async function checkAuth(JWT: string): Promise<boolean> {
-    await systemLogger.log('Checking JWT: ' + JWT.slice(0, 10) + '...');
     const session = await db.selectFrom('session')
         .selectAll()
         .where('JWT', '=', JWT)
         .executeTakeFirst();
     if (!session) {
-        await systemLogger.error('Session not found: ' + JWT.slice(0, 10) + '...');
+        await systemLogger.error('Sitzung nicht gefunden: ' + JWT.slice(0, 10) + '...');
         return false;
     }
     if (session.expires < Date.now()) {
-        await systemLogger.error('Session expired: ' + JWT.slice(0, 10) + '...');
+        await systemLogger.error('Sitzung abgelaufen: ' + JWT.slice(0, 10) + '...');
         return false;
     }
     return true;
 }
 
+/**
+ * Ein Objekt, das die numerischen Werte für verschiedene Status-Typen zuordnet.
+ */
 export const ResponseStatus: { [key in Status]: number } = {
     "pending": 1,
     "running": 2,
@@ -36,7 +38,12 @@ export const ResponseStatus: { [key in Status]: number } = {
     "failed": 4
 }
 
-
+/**
+ * Formatiert einen Zeitstempel in ein Objekt mit Datums- und Zeitstrings.
+ * 
+ * @param timestamp - Der zu formatierende Zeitstempel in Millisekunden
+ * @returns Ein Objekt mit zwei Eigenschaften: 'date' im Format 'YYYYMMDD' und 'time' im Format 'HH:MM:SS'
+ */
 export function formatTimestamp(timestamp: number): { date: string, time: string } {
     const date = new Date(timestamp);
     const year = date.getFullYear();

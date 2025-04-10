@@ -18,17 +18,35 @@ export async function shutdown() {
 
 // Main application functionality
 export async function runApp() {
+    await systemLogger.log('Anwendung wird gestartet...');
     const app = express();
     const testMaster = TestMaster.instance;
     
+    app.use(async (req, res, next) => {
+        const start = Date.now();
+        await systemLogger.log(`HTTP ${req.method} ${req.url} - Gestartet`);
+        
+        res.on('finish', async () => {
+            const duration = Date.now() - start;
+            await systemLogger.log(
+                `HTTP ${req.method} ${req.url} - ${res.statusCode} - ${duration}ms`
+            );
+        });
+        
+        next();
+    });
+
     app.use(express.json());
     app.use('/macro', macroRoute);
     app.use('/auth', authRoute);
     
     
     app.listen(3000, async () => {
+        await systemLogger.log('Server hört auf Port 3000');
+        await systemLogger.log('Datenbank wird eingerichtet...');
         try { await databaseDown(db); } catch { } // Drop tables (TODO: Remove this line in production)
         await databaseUp(db);
+        await systemLogger.log('Datenbank-Setup abgeschlossen');
         await initSystemSessionForLogging(); // Create system session for logging
         await initSystemLogger(); // Initialize system logger
         await systemLogger.log('Everything with Protocol table is set up!');

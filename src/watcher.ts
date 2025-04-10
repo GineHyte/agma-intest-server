@@ -1,77 +1,102 @@
+/**
+ * @fileoverview Watcher-Modul für die automatische Neustart der Anwendung bei Dateiänderungen.
+ * Verwendet nodemon, um Dateien zu überwachen und startet die Hauptanwendung als Kindprozess neu.
+ */
 import { default as nodemonDefault } from 'nodemon';
 import { fork, type ChildProcess } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import Logger, { systemLogger } from './logger.ts';
 
-// Handle ESM vs CommonJS nodemon import inconsistency
+// Handhabung der ESM vs CommonJS nodemon Import-Inkonsistenz
 const nodemon = nodemonDefault as any;
 
-// Get current directory
+// Aktuelles Verzeichnis erhalten
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 let childProcess: ChildProcess | null = null;
+const watcherLogger = new Logger();
 
-// Start the app in a child process
+/**
+ * Initialisiert den Logger für den Watcher-Prozess
+ */
+async function initWatcherLogger() {
+    await watcherLogger.setJWT('system');
+    await watcherLogger.log('Watcher-Prozess gestartet');
+}
+
+// Logger initialisieren
+initWatcherLogger();
+
+/**
+ * Startet die App in einem Kindprozess.
+ * Richtet Event-Handler für die Prozess-Kommunikation ein und verwaltet den Lifecycle.
+ */
 function startApp() {
     try {
         if (!childProcess) {
             childProcess = fork('./src/index.ts', [], {});
+            
             childProcess.on('message', (message) => {
                 if (message === 'shutdown') {
-                    console.log('Child process requested shutdown');
+                    watcherLogger.log('Kindprozess hat Herunterfahren angefordert');
                     childProcess?.kill();
                     childProcess = null;
                     startApp();
                 }
-            }
-            );
-            console.log(`App started with PID: ${childProcess.pid}`);
+            });
+            
+            watcherLogger.log(`App gestartet mit PID: ${childProcess.pid}`);
         } else {
-            console.log('Child process already running, so only way to restart is to send "shutdown" message from child process');
+            watcherLogger.log('Kindprozess läuft bereits, daher ist der einzige Weg zum Neustart, eine "shutdown"-Nachricht vom Kindprozess zu senden');
         }
 
     } catch (err) {
-        console.error('Error starting child process:', err);
+        const error = err as Error;
+        watcherLogger.error('Fehler beim Starten des Kindprozesses:', error.message, '\nStack:', error.stack);
     }
 }
 
-// Initialize nodemon
+// Nodemon initialisieren
 nodemon({
     script: './src/index.ts',
     ext: 'ts',
     watch: ['./src/'],
-    exec: 'echo "Changes detected"', // Just a placeholder
-    ignore: ['./src/watcher.ts', './src/debugger/**'] // Don't watch the watcher itself
+    exec: 'echo "Änderungen erkannt"', // Nur ein Platzhalter
+    ignore: ['./src/watcher.ts', './src/debugger/**'] // Den Watcher selbst nicht überwachen
 });
 
-// Start the app initially
+// App initial starten
 startApp();
 
-// Listen for nodemon restart events
+/**
+ * Event-Handler für nodemon-Neustartsereignisse.
+ * Versucht, den Kindprozess ordnungsgemäß herunterzufahren und startet ihn neu.
+ */
 nodemon.on('restart', async (files: string[]) => {
-    console.log('Files changed:', files);
+    watcherLogger.log('Dateien geändert:', JSON.stringify(files));
+    watcherLogger.log('Neustart der Anwendung wegen Änderungen in:', 
+        files.map(f => f.split('/').pop()).join(', '));
 
-    // Try to send shutdown message to child process
+    // Versuche, Shutdown-Nachricht an Kindprozess zu senden
     if (childProcess) {
         try {
-            // Give the process time to shutdown gracefully
+            // Dem Prozess Zeit geben, um ordnungsgemäß herunterzufahren
             childProcess.send('shutdown');
+            watcherLogger.log('Shutdown-Signal an Kindprozess gesendet');
         } catch (err) {
-            console.log('Failed to send shutdown message, forcing restart');
+            const error = err as Error;
+            watcherLogger.error('Fehler beim Senden der Shutdown-Nachricht:', error.message);
         }
 
-        // Start the app again
+        // App neu starten
         startApp();
     }
 });
 
-// Handle nodemon crashes
+// Nodemon-Abstürze behandeln
 nodemon.on('crash', () => {
-    console.error('Nodemon crashed! Restarting...');
+    watcherLogger.error('Nodemon abgestürzt! Neustart wird eingeleitet...');
     startApp();
-});
-
-process.on('SIGINT', () => {
-    console.log('Watcher received SIGINT, killing child process');
 });

@@ -22,6 +22,10 @@ export async function postMacro(req: Request, res: Response): Promise<void> {
         }
 
         const { entries, string, screencastFlag, screencastPath, logFlag, logPath } = req.body;
+        logger.logFlag = logFlag;
+        let userData = await db.selectFrom('session').selectAll().where('JWT', '=', JWT).executeTakeFirstOrThrow();
+        await logger.log('Verbindung wurde hergestellt!', "YB:", userData.YB, "YSYS:", userData.YSYS, "YJBN:", userData.YJBN);
+        await logger.log('Erhaltene Post Macro Anfrage:', "Entries Lange:", entries.length, "string:", string, "screencastFlag:", screencastFlag, "screencastPath:", screencastPath, "logFlag:", logFlag, "logPath:", logPath);
         const { MACROID } = req.params;
         if (!Array.isArray(entries) || entries.length === 0) {
             res.status(400).json({ status: 400, message: 'Es soll mehr als 0 entries in body eingeben werden!' });
@@ -43,6 +47,8 @@ export async function postMacro(req: Request, res: Response): Promise<void> {
             logPath,
         }).execute();
 
+        logger.debug(screencastPath, logPath)
+
         await TestMaster.instance.pushTask({
             action: 'test',
             entries,
@@ -53,7 +59,6 @@ export async function postMacro(req: Request, res: Response): Promise<void> {
             logPath,
             userMacroId: MACROID
         });
-        await TestMaster.instance.pushTask({ action: 'endtest', JWT, userMacroId: MACROID });
 
         res.status(200).json({ status: 200, message: 'OK' });
     } catch (error) {

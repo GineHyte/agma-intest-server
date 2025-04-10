@@ -41,6 +41,11 @@ export default class TestMaster {
         await systemLogger.log('Alle Worker haben ', action, ' abgeschlossen');
     }
 
+    /**
+     * Wartet, bis ein bestimmter Worker seine Aufgabe abgeschlossen hat.
+     * @param id Die ID des Workers.
+     * @param action Optionale Aktion, auf deren Abschluss gewartet werden soll.
+     */
     private async waitForWokerToFinish(id: number, action?: string) {
         await systemLogger.log('Warte auf Abschluss des Worker [', id, '] ', action, '...');
         let worker = await db.selectFrom('worker').select(['status', 'action']).where("id", "=", id).executeTakeFirstOrThrow();
@@ -66,7 +71,7 @@ export default class TestMaster {
      */
     private async workerErrorHandler(error: Error, id?: number) {
         await systemLogger.error('Unbehandelter Fehler in Worker [', id === undefined ? id : '', ']: ', JSON.stringify(error));
-        await systemLogger.error('Process stack: ', new Error().stack)
+        await systemLogger.error('Prozess Stack: ', new Error().stack)
     }
 
     /**
@@ -202,7 +207,10 @@ export default class TestMaster {
      * @param task Die hinzuzufügende Aufgabe.
      */
     public async pushTask(task: MasterMessage) {
-        await systemLogger.log('Füge Aufgabe hinzu!');
+        await systemLogger.log('Aufgabe zur Warteschlange hinzugefügt:',
+            'Aktion:', task.action,
+            'BenutzerMakroId:', task.userMacroId,
+            'Warteschlangengröße:', this.tasks.length + 1);
         this.tasks.push(task);
         await this.processTasks();
     }
@@ -211,22 +219,21 @@ export default class TestMaster {
      * Verarbeitet Aufgaben aus der Warteschlange und weist sie verfügbaren Workern zu.
      */
     public async processTasks() {
-        await systemLogger.log('processing workers tasks....', this.tasks.length)
+        await systemLogger.log('Verarbeitung der Worker-Aufgaben....', this.tasks.length)
         while (this.tasks.length > 0) {
             let workers = await db.selectFrom('worker').select(['id', 'status']).execute();
             for (let worker of workers) { // Suche nach verfügbaren Workern
                 if (worker.status === 'running' || worker.status === 'pending') { continue; } // Worker ist bereits beschäftigt
                 let workerObject = this.workers[worker.id];
                 let task = this.tasks.shift();
-                await systemLogger.log('free worker found!', worker.id, JSON.stringify(task))
+                await systemLogger.log('Freier Worker gefunden!', worker.id, JSON.stringify(task))
                 workerObject.postMessage(task);
-                await systemLogger.log("SETTING STATUS PENDING ON WORKER!!!!!", JSON.stringify(workerObject))
                 await db.updateTable('worker')
                     .where("id", "=", worker.id)
                     .set({
                         threadId: workerObject.threadId,
                         status: 'pending',
-                        message: 'waiting for status running...'
+                        message: 'Warte auf Status running...'
                     }).execute();
                 break;
             }

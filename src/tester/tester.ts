@@ -3,7 +3,6 @@ import type {
     EvaluateFuncWith,
     ElementHandle,
     NodeFor,
-    WaitForSelectorOptions,
     KeyboardTypeOptions,
     ClickOptions,
     KeyInput,
@@ -12,6 +11,11 @@ import type {
 import config from '../config.ts';
 import Logger from '../logger.ts';
 
+/**
+ * Test-Automatisierungsklasse für die Anwendungsoberfläche.
+ * Ermöglicht das automatisierte Navigieren durch die Anwendung, Eingabe von Daten
+ * und Ausführen von Aktionen wie Klicken, Tippen und Programmaufrufe.
+ */
 export default class Tester {
     private appStatus!: AppStatus;
     private haltZeit: number;
@@ -20,7 +24,14 @@ export default class Tester {
     private tippenZeit: number;
     private currentTestStep: boolean = false;
 
-
+    /**
+     * Erstellt eine neue Tester-Instanz.
+     * 
+     * @param page - Die Browser-Seite, auf der der Test ausgeführt wird
+     * @param logger - Logger-Instanz für Protokollierung
+     * @param haltZeit - Wartezeit zwischen Aktionen in Millisekunden
+     * @param tippenZeit - Verzögerungszeit zwischen einzelnen Tastenanschlägen
+     */
     constructor(
         page: Page,
         logger: Logger,
@@ -33,6 +44,11 @@ export default class Tester {
         this.tippenZeit = tippenZeit;
     }
 
+    /**
+     * Analysiert den Anwendungsstatus und speichert die Informationen.
+     * 
+     * @private
+     */
     private async parseAppStatus() {
         let appStatus = await this.page.evaluate(() => window.AppStatus);
         this.appStatus = {} as AppStatus
@@ -45,21 +61,42 @@ export default class Tester {
         this.appStatus.jobverwaltungStatus = appStatus[6].split(' ')[1] === 'aktiv';
     }
 
+    /**
+     * Sucht und wartet auf ein Element mit dem angegebenen Selektor.
+     * 
+     * @param selector - CSS-Selektor zum Finden des Elements
+     * @param maxTime - Maximale Wartezeit in Millisekunden
+     * @returns ElementHandle des gefundenen Elements
+     * @throws Error wenn das Element nicht gefunden wird
+     */
     async $(selector: string, maxTime: number = 30_000): Promise<ElementHandle<NodeFor<string>>> {
         await this.page.waitForSelector(selector, { timeout: maxTime });
         let element = await this.page.$(selector);
         if (!element) {
-            this.logger.error("Element not found: " + selector);
-            throw new Error("Element not found: " + selector);
+            this.logger.error("Element nicht gefunden: " + selector);
+            throw new Error("Element nicht gefunden: " + selector);
         }
         return element;
     }
 
+    /**
+     * Führt eine Funktion auf einem Element mit dem angegebenen Selektor aus.
+     * 
+     * @param selector - CSS-Selektor zum Finden des Elements
+     * @param pageFunction - Die auf dem Element auszuführende Funktion
+     * @param args - Zusätzliche Argumente für die Funktion
+     * @returns Ergebnis der Funktion
+     */
     async $eval(selector: string, pageFunction: EvaluateFuncWith<any, any[]>, ...args: any): Promise<any> {
         let element = await this.$(selector);
         return element.evaluate(pageFunction, ...args);
     }
 
+    /**
+     * Wählt ein Element aus einer Auswahlliste aus.
+     * 
+     * @param auswahl - Index des auszuwählenden Elements oder -1 für Header
+     */
     async auswahlMel(auswahl: number) {
         if (auswahl === -1) {
             await this.klicken(`[id="${await this.getAktWindowID()}_header-targetEl"] div[role="button"]`);
@@ -75,58 +112,90 @@ export default class Tester {
         }
     }
 
+    /**
+     * Drückt eine Taste auf der Tastatur.
+     * 
+     * @param key - Die zu drückende Taste
+     * @param options - Optionen für den Tastenvorgang
+     * @returns Promise das aufgelöst wird, wenn die Taste gedrückt wurde
+     */
     async drucken(key: KeyInput, options?: Readonly<KeyPressOptions>): Promise<void> {
         await this.halten(this.haltZeit);
-        await this.logger.log("Drücke Taste: " + key);
         return await this.page.keyboard.press(key, options);
     }
 
+    /**
+     * Gibt Text in ein Formularfeld ein.
+     * 
+     * @param feld - Nummer des Formularfeldes
+     * @param text - Einzugebender Text
+     * @param seite - Seitennummer des Formulars
+     */
     async feldEingabe(feld: number, text: string, seite: number = 1) {
-        if (!await (this.$('div[id=SeitenMenue1][class*=x-item-disabled]'))) { // wenn Seitenmenü nicht disabled
+        if (!await (this.$('div[id=SeitenMenue1][class*=x-item-disabled]'))) { // wenn Seitenmenü nicht deaktiviert
             await this.klicken(`li[data-boundview="SeitenMenue1-picker"][data-recordindex="${seite}"]`);
         }
 
         let inputEl = await this.$(`[data-componentid="${await this.getAktWindowID()}_EDIT${seite}_${feld}"]`);
         if ((await (await inputEl.getProperty('ariaReadonly')).jsonValue()) === 'true' || !inputEl) {
-            this.logger.error("Feld ist readonly: " + feld);
+            this.logger.error("Feld ist schreibgeschützt: " + feld);
             return;
         }
         await inputEl.type(text, { delay: this.tippenZeit });
         await this.drucken('Enter');
     }
 
+    /**
+     * Ermittelt die ID des aktuellen Fensters.
+     * 
+     * @returns ID des aktuellen Fensters
+     */
     async getAktWindowID() {
         return await this.page.evaluate(() => window.windowID);
     }
 
+    /**
+     * Pausiert die Ausführung für die angegebene Zeit.
+     * 
+     * @param ms - Wartezeit in Millisekunden
+     * @returns Promise das nach der Wartezeit aufgelöst wird
+     */
     async halten(ms: number) {
-        await this.logger.log("Warte " + ms + "ms");
         return await new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    /**
+     * Klickt auf ein Element mit dem angegebenen Selektor.
+     * 
+     * @param selector - CSS-Selektor des zu klickenden Elements
+     * @param options - Optionen für den Klickvorgang
+     * @returns Promise das aufgelöst wird, wenn der Klick ausgeführt wurde
+     */
     async klicken(selector: string, options?: Readonly<ClickOptions>): Promise<void> {
         selector = this.replaceAllElementsIds(selector);
         await this.halten(this.haltZeit);
-        await this.logger.log("Klicke auf Element: " + selector);
         let element = await this.$(selector);
         return await element.click(options);
     }
 
+    /**
+     * Führt den Login-Prozess in der Anwendung durch.
+     */
     async login() {
-        await this.logger.log("Anmeldung...");
         await this.tippen(config.bediener, '[data-componentid=name]', { delay: this.tippenZeit });
         await this.tippen(config.kennwort, '[data-componentid=kenn]', { delay: this.tippenZeit });
         await this.drucken('Enter');
         await this.drucken('Enter');
         await this.$('[id=image-1033]');                        // warten auf iFood Logo
-        await this.logger.log("Anmeldung erfolgreich");
         await this.parseAppStatus();
-        await this.logger.log("Job: " + this.appStatus.job);
     }
 
+    /**
+     * Führt den Logout-Prozess in der Anwendung durch.
+     */
     async logout() {
-        await this.logger.log("Abmeldung...");
         let counter = 0;
+        this.currentTestStep = false;
         // Zurück zum Hauptbildschirm
         while ((await this.getAktWindowID()) !== '') {
             counter++;
@@ -139,9 +208,11 @@ export default class Tester {
         }
         await this.programmaufruf("000");
         await this.$('input[value="zum Login"]'); // warten auf zum Login Button
-        await this.logger.log("logout done!");
     }
 
+    /**
+     * Führt einen erneuten Login in der Anwendung durch, falls erforderlich.
+     */
     async relogin() {
         let loginBtn = await this.$('input[value="zum Login"]'); // Suchen nach zum Login Button
         if (loginBtn) {
@@ -155,12 +226,24 @@ export default class Tester {
         }
     }
 
+    /**
+     * Ruft ein Programm oder Menüpunkt in der Anwendung auf.
+     * 
+     * @param menuepunkt - ID des aufzurufenden Menüpunkts
+     */
     async programmaufruf(menuepunkt: string) {
-        await this.logger.log("Programmaufruf: " + menuepunkt);
         await this.page.evaluate((menuepunkt) => window.programmaufruf(menuepunkt), menuepunkt);
         await this.halten(this.haltZeit);
     }
 
+    /**
+     * Gibt Text auf der Seite oder in einem bestimmten Element ein.
+     * 
+     * @param text - Einzugebender Text
+     * @param selector - Optional: CSS-Selektor des Zielelements
+     * @param options - Optionen für die Texteingabe
+     * @returns Promise das aufgelöst wird, wenn der Text eingegeben wurde
+     */
     async tippen(text: string, selector: string | undefined = undefined, options?: Readonly<KeyboardTypeOptions>): Promise<void> {
         await this.halten(this.haltZeit);
         if (selector) {
@@ -169,20 +252,42 @@ export default class Tester {
         return await this.page.keyboard.type(text, options);
     }
 
+    /**
+     * Gibt Text in ein Mehrfachauswahl-Feld ein.
+     * 
+     * @param text - Einzugebender Text
+     * @param num - Nummer des Feldes
+     */
     async tippenMel(text: string, num: number) {
         await this.tippen(text, `input[id="${await this.getAktWindowID()}_FPOS1_${num}-inputEl"]`, { delay: this.tippenZeit });
         await this.drucken('Enter');
     }
 
+    /**
+     * Wartet bis die aktuelle Maske geladen ist.
+     */
     async wartenBisMaskeGeladen() {
         await this.$(`[id="${await this.getAktWindowID()}-body"]`);
     }
 
+    /**
+     * Ersetzt Platzhalter in einem Selektor durch aktuelle Werte.
+     * 
+     * @param str - Selektor-String mit Platzhaltern
+     * @returns Fertig ersetzter Selektor-String
+     * @private
+     */
     private replaceAllElementsIds(str: string) {
         let res = str.replaceAll('||JBN||', this.appStatus.job.toString());
         return res;
     }
 
+    /**
+     * Zeigt den aktuellen Testschritt in der Benutzeroberfläche an.
+     * 
+     * @param key - Schlüssel oder Bezeichner des Testschritts
+     * @param type - Typ des Testschritts
+     */
     async showCurrentStep(key: string, type: string) {
         if (!this.currentTestStep) {
             let html = `<div style="display:flex;justify-content:center;align-items:center;">
@@ -208,20 +313,26 @@ export default class Tester {
         }, key, type)
     }
 
+    /**
+     * Führt einen bestimmten Testschritt aus.
+     * 
+     * @param key - Schlüssel oder Bezeichner des Testschritts
+     * @param type - Typ des Testschritts (bestimmt die auszuführende Aktion)
+     */
     async testStep(key: string, type: string) {
         let windowID = await this.getAktWindowID()
         await this.showCurrentStep(key, type)
         switch (type) {
-            case 'M': // maus
+            case 'M': // Maus
                 await this.klicken(`[id="${key}"]`);
                 break;
-            case 'T': // tastatur
+            case 'T': // Tastatur
                 await this.drucken(key as KeyInput);
                 break;
-            case 'P': // menuepunkt 
+            case 'P': // Menüpunkt 
                 await this.programmaufruf(key);
                 break;
-            case 'MAVBTN': // MAske Vertikale BuTtoN 
+            case 'MAVBTN': // Maske Vertikaler Button 
                 var klickId = await this.page.evaluate((ctrl: string) => {
                     let butbar = window.Ext.getCmp(`${windowID}butbar`)
                     let items = butbar.items.items

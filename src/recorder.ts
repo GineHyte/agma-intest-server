@@ -4,8 +4,8 @@ import config from "./config.ts";
 
 
 /**
- * A utility class for capturing screenshots and recording screen activity from a browser page.
- * This class handles creating directories for media storage and manages recording sessions.
+ * Eine Hilfsklasse zum Erfassen von Screenshots und Aufzeichnen von Bildschirmaktivitäten einer Browser-Seite.
+ * Diese Klasse verwaltet die Erstellung von Verzeichnissen für die Medienspeicherung und steuert Aufzeichnungssitzungen.
  */
 export default class Recorder {
     private _recording?: any;
@@ -17,11 +17,11 @@ export default class Recorder {
 
 
     /**
-     * Creates a new Recorder instance.
+     * Erstellt eine neue Recorder-Instanz.
      * 
-     * @param page - The browser page to record or screenshot (typically a Playwright Page object)
-     * @param logger - Logger instance for recording operation statuses and errors
-     * @param screencastPath - Directory path where screenshots and recordings will be saved
+     * @param page - Die Browser-Seite, die aufgezeichnet oder fotografiert werden soll (typischerweise ein Playwright Page-Objekt)
+     * @param logger - Logger-Instanz zur Aufzeichnung von Betriebszuständen und Fehlern
+     * @param screencastPath - Verzeichnispfad, in dem Screenshots und Aufzeichnungen gespeichert werden
      */
     constructor(page: any, logger: Logger) {
         this.page = page;
@@ -29,10 +29,10 @@ export default class Recorder {
     }
 
     /**
-     * Takes a screenshot of the current page state and saves it as a PNG file.
+     * Nimmt einen Screenshot vom aktuellen Seitenzustand auf und speichert ihn als PNG-Datei.
      * 
-     * @param name - The filename for the screenshot (without extension)
-     * @returns A Promise that resolves when the screenshot is saved
+     * @param name - Der Dateiname für den Screenshot (ohne Erweiterung)
+     * @returns Ein Promise, das aufgelöst wird, wenn der Screenshot gespeichert ist
      */
     public async screenshot(name: string) {
         if (!this.screencastFlag) { return }
@@ -40,15 +40,15 @@ export default class Recorder {
             await this.page.screenshot({
                 path: this.screencastPath + name + ".png",
             });
-            await this.logger.log("Screenshot saved: " + name + ".png");
+            await this.logger.log("Screenshot gespeichert: " + name + ".png");
         }
     }
 
     /**
-     * Starts screen recording of the current page.
+     * Startet die Bildschirmaufzeichnung der aktuellen Seite.
      * 
-     * @param name - The filename for the recording (without extension)
-     * @returns A Promise that resolves when recording has started
+     * @param name - Der Dateiname für die Aufzeichnung (ohne Erweiterung)
+     * @returns Ein Promise, das aufgelöst wird, wenn die Aufzeichnung gestartet wurde
      */
     public async startRecording(name: string) {
         if (!this.screencastFlag) { return }
@@ -59,20 +59,20 @@ export default class Recorder {
             }
             this.screencastLastName = name;
             this._recording = await this.page.screencast({ path: `${this.screencastPath}${name}.webm` });
-            await this.logger.log("Recording started: " + name + ".webm");
+            await this.logger.log("Aufzeichnung gestartet: " + `${this.screencastPath}${name}.webm`);
         }
     }
 
     /**
-     * Stops the current screen recording if one is in progress.
+     * Stoppt die aktuelle Bildschirmaufzeichnung, falls eine läuft.
      * 
-     * @returns A Promise that resolves when recording has stopped
+     * @returns Ein Promise, das aufgelöst wird, wenn die Aufzeichnung gestoppt wurde
      */
     public async stopRecording() {
         if (!this.screencastFlag) { return }
         if (this._recording) {
             await this._recording.stop();
-            await this.logger.log("Recording stopped");
+            await this.logger.log("Aufzeichnung gestoppt");
             this._recording = undefined;
         }
     }

@@ -4,24 +4,42 @@ import { Kysely, SqliteDialect } from 'kysely'
 import config from './config.ts'
 import { systemLogger } from './logger.ts'
 
+/**
+ * SQLite-Dialekt für die Kysely-Datenbankverbindung
+ * @description Konfiguriert den SQLite-Dialekt mit dem angegebenen Datenbankpfad
+ */
 const dialect = new SqliteDialect({
   database: new SQLite(config.databasePath),
 })
 
-// Pass the Database interface as a type parameter
+/**
+ * Kysely-Datenbankinstanz für Anwendungsdatenbankoperationen
+ * @type {Kysely<Database>}
+ * @description Exportierte Datenbankinstanz mit Protokollierungsfunktionen
+ */
+// Übergeben Sie die Datenbankschnittstelle als Typparameter
 export const db = new Kysely<Database>({
   dialect,
   log(event) {
-    // Do not log protocol queries
+    // Protokollabfragen nicht protokollieren
     if (event.query.sql.includes('protocol')) return
     if (event.level === 'error') {
       systemLogger.error(event.error)
     } else if (event.level === 'query') {
-      systemLogger.log(event.query.sql + '  [' + JSON.stringify(event.queryDurationMillis) + 'ms]')
+      // Optional: Nur langsame Queries loggen
+      if (event.queryDurationMillis > 500) {
+        systemLogger.log(`Langsame Abfrage: ${event.query.sql} [${JSON.stringify(event.queryDurationMillis)}ms]`);
+      }
     }
   }
 })
 
+/**
+ * Erstellt das Datenbankschema und die erforderlichen Tabellen
+ * @param {Kysely<any>} db - Kysely-Datenbankinstanz
+ * @returns {Promise<void>} Promise, das aufgelöst wird, wenn das Schema erstellt wurde
+ * @description Initialisiert das Datenbankschema für die Anwendung
+ */
 export async function up(db: Kysely<any>) {
   await db.schema
     .createTable('session')
@@ -84,6 +102,11 @@ export async function up(db: Kysely<any>) {
     ).execute()
 }
 
+/**
+ * Initialisiert eine Systemsitzung in der Datenbank für die Protokollierung
+ * @returns {Promise<void>} Promise, das aufgelöst wird, wenn die Systemsitzung erstellt wurde
+ * @description Erstellt einen Systemeintrag in der Sitzungstabelle für Systemprotokolle
+ */
 export async function initSystemSessionForLogging() {
   await db.insertInto('session')
     .values({
@@ -97,6 +120,12 @@ export async function initSystemSessionForLogging() {
     .execute()
 }
 
+/**
+ * Entfernt das Datenbankschema und alle Tabellen
+ * @param {Kysely<any>} db - Kysely-Datenbankinstanz
+ * @returns {Promise<void>} Promise, das aufgelöst wird, wenn das Schema entfernt wurde
+ * @description Löscht alle Tabellen und bereinigt die Datenbankstruktur
+ */
 export async function down(db: Kysely<any>) {
   await db.schema.dropTable('session').execute()
   await db.schema.dropTable('protocol').execute()
