@@ -99,6 +99,9 @@ export default class TestMaster {
         await systemLogger.log('Worker [', id, '] hat ', action, ' mit dem Status ', status, ' gemeldet.');
         switch (action) {
             case 'init':
+                if (status === 'failed') {
+                    worker.terminate();
+                }
                 break;
             case 'teardown':
                 if (status === 'completed') {

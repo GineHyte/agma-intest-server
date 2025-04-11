@@ -190,6 +190,11 @@ export default class Tester {
         await this.parseAppStatus();
     }
 
+    async keineLizenzen() {
+        return await this.page.evaluate(() => Array.from(document.querySelectorAll('p'))
+            .find(el => el.textContent === 'Leider sind keine Lizenzen mehr frei.')) !== undefined
+    }
+
     /**
      * Führt den Logout-Prozess in der Anwendung durch.
      */
@@ -200,7 +205,7 @@ export default class Tester {
         while ((await this.getAktWindowID()) !== '') {
             counter++;
             if (counter > 100) {
-                this.logger.error("Fehler beim Abmelden");
+                this.logger.error("Fehler beim Abmelden (100 mal Escape -> nix)");
                 return;
             }
             await this.drucken('Escape');
@@ -322,6 +327,7 @@ export default class Tester {
     async testStep(key: string, type: string) {
         let windowID = await this.getAktWindowID()
         await this.showCurrentStep(key, type)
+        await this.logger.log(`Testschritt: ${key} ${type}`)
         switch (type) {
             case 'M': // Maus
                 await this.klicken(`[id="${key}"]`);
@@ -370,15 +376,20 @@ export default class Tester {
                 await this.klicken(`[class="${selectorForClick}"]`, { count: 2 })
                 break;
             case 'MATHEADKLCK':
-                var selectroForClick = await this.page.evaluate((col: number) => {
+                var selectorForClick = await this.page.evaluate((col: number) => {
                     let senchagrid = window.grid[window.windIdx];
                     return senchagrid.columns[col].id;
                 }, parseInt(key))
-                await this.klicken(`[id="${selectroForClick}"]`)
+                await this.klicken(`[id="${selectorForClick}"]`)
                 break;
             case 'ALERTSCHL':
-                var selectroForClick = await this.page.evaluate(() => window.Ext.Msg.down('button').el.dom.id)
-                await this.klicken(`a[id="${selectroForClick}"]`)
+                var selectorForClick = await this.page.evaluate(() => window.Ext.Msg.down('button').el.dom.id)
+                await this.klicken(`a[id="${selectorForClick}"]`)
+                break;
+            case 'MAVSEITE':
+                var windIdx = await this.page.evaluate(() => window.windIdx)
+                await this.klicken(`[id="SeitenMenue${windIdx}"] input`)
+                await this.page.evaluate((key: number) => { window.Ext.getCmp("SeitenMenue" + window.windIdx).picker.setSelection(key) }, parseInt(key) - 1)
                 break;
         }
     }

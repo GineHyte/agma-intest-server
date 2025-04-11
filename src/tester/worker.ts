@@ -112,15 +112,26 @@ async function processWorkerTask(task: MasterMessage) {
         case 'teardown':
             await tester.logout();
             await workerRecorder.stopRecording();
+            postMessage({
+                status: 'completed',
+                message: "Teardown Erfolg!",
+                action: task.action,
+                id: workerData.id,
+            });
             break;
         case 'test':
-            failed = false;
             await testHandler(task);
             break;
         case 'endtest':
             await tester.logout();
             await workerRecorder.stopRecording();
             await tester.relogin();
+            postMessage({
+                status: 'completed',
+                message: "Endtest Erfolg!",
+                action: task.action,
+                id: workerData.id,
+            });
             break;
         case 'init':
             // Neuen Browser-Kontext erstellen, um Konflikte mit Session-Token zu vermeiden
@@ -131,22 +142,29 @@ async function processWorkerTask(task: MasterMessage) {
             tester = new Tester(page, workerLogger);
             await page.goto(config.url + "?Device=" + device);
             await page.setViewport(config.viewport);
-            await tester.login();
+            try {
+                await tester.login();
+            } catch (e) {
+                await workerLogger.error('Fehler bei der Anmeldung', e)
+                if (await tester.keineLizenzen()) {
+                    postMessage({
+                        status: 'failed',
+                        message: "Keine Lizenzen!",
+                        action: task.action,
+                        id: workerData.id,
+                    });
+                }
+                break;
+            }
+            postMessage({
+                status: 'completed',
+                message: "Init Erfolg!",
+                action: task.action,
+                id: workerData.id,
+            });
         default:
             break;
     }
-    if (failed) { return }
-    let msg: WorkerMessage = {
-        status: 'completed',
-        message: "Erfolg!",
-        action: action,
-        id: workerData.id,
-        userMacroId: userMacroId,
-        JWT: task.JWT,
-    };
-    if (workerLogger.logFlag) { msg.logName = workerLogger.logLastName }
-    if (workerRecorder.screencastFlag) { msg.screencastName = workerRecorder.screencastLastName }
-    postMessage(msg);
 }
 
 /**
@@ -186,7 +204,6 @@ async function testHandler(task: MasterMessage) {
             try {
                 await tester.testStep(entry.key, entry.type)
             } catch (error) {
-                failed = true;
                 let message: string = '[Eintrag: ' + JSON.stringify(entry) + '] ';
                 message += error instanceof Error ? error.message : 'Interner Serverfehler';
                 await workerLogger.error(
@@ -209,11 +226,23 @@ async function testHandler(task: MasterMessage) {
                 if (workerLogger.logFlag) { msg.logName = workerLogger.logLastName }
                 if (workerRecorder.screencastFlag) { msg.screencastName = workerRecorder.screencastLastName }
                 postMessage(msg);
+                await processWorkerTask({ action: 'endtest', JWT: task.JWT, userMacroId: task.userMacroId });
                 return;
             }
         }
         await workerRecorder.stopRecording();
         await workerLogger.dumpProtocolToFile(logName);
+        let msg: WorkerMessage = {
+            status: 'completed',
+            message: "Erfolg!",
+            action: task.action,
+            id: workerData.id,
+            userMacroId: userMacroId,
+            JWT: task.JWT,
+        };
+        if (workerLogger.logFlag) { msg.logName = workerLogger.logLastName }
+        if (workerRecorder.screencastFlag) { msg.screencastName = workerRecorder.screencastLastName }
+        postMessage(msg);
         await processWorkerTask({ action: 'endtest', JWT: task.JWT, userMacroId: task.userMacroId });
     }
 }
