@@ -13,6 +13,10 @@ import { systemLogger } from './logger.ts';
  *          (true, wenn eine entsprechende Sitzung in der Datenbank existiert, false andernfalls)
  */
 export async function checkAuth(JWT: string): Promise<boolean> {
+    if (!JWT) {
+        await systemLogger.error('JWT ist nicht vorhanden!');
+        return false;
+    }
     const session = await db.selectFrom('session')
         .selectAll()
         .where('JWT', '=', JWT)

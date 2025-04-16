@@ -23,6 +23,8 @@ export default class Tester {
     private page: Page;
     private tippenZeit: number;
     private currentTestStep: boolean = false;
+    private fehler: boolean = false;
+    private fehlerBeschreibung: string = '';
 
     /**
      * Erstellt eine neue Tester-Instanz.
@@ -188,6 +190,15 @@ export default class Tester {
         await this.drucken('Enter');
         await this.$('[id=image-1033]');                        // warten auf iFood Logo
         await this.parseAppStatus();
+
+        await this.page.evaluate(() => {
+            let FehlerJSProxy = (e: any, m: any) => {
+                this.fehler = true;
+                this.fehlerBeschreibung = e.message;
+                window.FehlerJS(e, m)
+            }
+            window.FehlerJS = FehlerJSProxy;
+        });
     }
 
     async keineLizenzen() {

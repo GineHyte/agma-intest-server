@@ -22,6 +22,7 @@ declare global {
         programmaufruf: (programm: string) => void;
         aufnahmeListeClear: () => void;
         ausfuehrenAgmaIntest: () => void;
+        FehlerJS: (e: any, m: any) => void;
         aufnahmeListeAgmaIntest: any; // Ext.Panel
         Ext: any;
         grid: any[];
